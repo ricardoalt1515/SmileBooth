@@ -1,0 +1,21 @@
+# Core API (ligero)
+fastapi
+uvicorn
+pydantic
+python-multipart
+
+# Imágenes (optimizado)
+pillow
+opencv-python-headless
+
+# QR (ligero)
+qrcode
+
+# Database (solo lo necesario)
+sqlalchemy
+
+# macOS printing
+pycups
+
+# Utils
+python-dotenv
