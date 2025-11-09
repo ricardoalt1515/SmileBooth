@@ -42,7 +42,14 @@ import EventsManager from '../components/EventsManager';
 import TemplatesManager from '../components/TemplatesManager';
 import StripPreview from '../components/StripPreview';
 
-const TAB_PANEL_CLASS = 'space-y-6 max-h-[calc(100vh-220px)] overflow-y-auto pr-3 w-full';
+interface Design {
+  id: string;
+  name: string;
+  file_path: string;
+  preview_url: string;
+  is_active: boolean;
+  created_at: string;
+}
 
 export default function SettingsScreen() {
   const {
@@ -57,6 +64,7 @@ export default function SettingsScreen() {
   } = useAppStore();
 
   const toast = useToastContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Local form state
   const [formData, setFormData] = useState({
@@ -227,7 +235,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-6 lg:px-12 py-10 relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-background text-foreground p-8 relative">
       {/* Close Button */}
       <button
         onClick={handleBack}
@@ -238,7 +246,7 @@ export default function SettingsScreen() {
       </button>
 
       {/* Header */}
-      <div className="max-w-6xl mx-auto w-full">
+      <div className="max-w-5xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
           <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-3xl font-bold">Configuración</h1>
@@ -260,12 +268,13 @@ export default function SettingsScreen() {
         {/* shadcn Tabs */}
         <Tabs
           defaultValue="events"
-          className="w-full flex-1 flex flex-col overflow-hidden"
+          className="w-full"
           onValueChange={(value) => {
+            if (value === 'designs') loadDesigns();
             if (value === 'printing') loadPrinters();
           }}
         >
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-5 mb-8">
             <TabsTrigger value="events" className="gap-2">
               <Calendar className="w-4 h-4" />
               Eventos
@@ -285,7 +294,7 @@ export default function SettingsScreen() {
           </TabsList>
 
           {/* TAB: EVENTOS */}
-          <TabsContent value="events" className={TAB_PANEL_CLASS}>
+          <TabsContent value="events" className="space-y-6">
             <EventsManager 
               onEventActivated={async (preset) => {
                 // Recargar settings del backend cuando se activa un evento
@@ -301,7 +310,7 @@ export default function SettingsScreen() {
           </TabsContent>
 
           {/* TAB: TEMPLATES */}
-          <TabsContent value="templates" className={TAB_PANEL_CLASS}>
+          <TabsContent value="templates" className="space-y-6">
             <TemplatesManager 
               onTemplateActivated={(template) => {
                 toast.success(`Template "${template.name}" activado`);
@@ -310,7 +319,7 @@ export default function SettingsScreen() {
           </TabsContent>
 
           {/* TAB: GENERAL */}
-          <TabsContent value="general" className={TAB_PANEL_CLASS}>
+          <TabsContent value="general" className="space-y-6">
             {/* Grid 2 columnas para mejor aprovechamiento del espacio */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Photos Count */}
@@ -543,7 +552,7 @@ export default function SettingsScreen() {
               <StripPreview
                 layout={formData.strip_layout}
                 printMode={formData.print_mode}
-                designPreviewUrl={undefined}
+                designPreviewUrl={designs.find(d => d.is_active)?.preview_url}
                 photosCount={formData.photos_to_take}
               />
             </div>
@@ -565,8 +574,113 @@ export default function SettingsScreen() {
               </button>
             </div>
           </TabsContent>
+
+          {/* TAB: DESIGNS */}
+          <TabsContent value="designs" className="space-y-6">
+            {/* Upload Zone */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              className="border-2 border-dashed border-gray-700 rounded-lg p-12 text-center hover:border-[#ff0080] transition-all cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-lg mb-2">Arrastra tu diseño aquí</p>
+              <p className="text-sm text-gray-400">o haz click para seleccionar</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              />
+            </div>
+
+            {/* Loading State */}
+            {isLoadingDesigns && (
+              <div className="text-center py-8">
+                <div className="inline-block w-8 h-8 border-2 border-[#ff0080] border-t-transparent rounded-full animate-spin" />
+                <p className="text-gray-400 mt-4">Cargando diseños...</p>
+              </div>
+            )}
+
+            {/* Designs Grid */}
+            {!isLoadingDesigns && designs.length > 0 && (
+              <div className="grid grid-cols-3 gap-6">
+                {designs.map((design) => (
+                  <div
+                    key={design.id}
+                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-[#ff0080] transition-all"
+                  >
+                    <div className="aspect-[4/3] bg-gray-900">
+                      <img
+                        src={`${API_BASE_URL}${design.preview_url}`}
+                        alt={design.name}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+
+                    {design.is_active && (
+                      <div className="absolute top-3 right-3 bg-[#ff0080] text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+                        <Check className="w-4 h-4" />
+                        Activo
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-gray-800/50">
+                      <p className="text-sm font-medium truncate mb-3">{design.name}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleActivateDesign(design.id)}
+                          disabled={design.is_active}
+                          className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                            design.is_active
+                              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                              : 'bg-[#ff0080] hover:bg-[#ff0080]/80 text-white'
+                          }`}
+                        >
+                          {design.is_active ? 'Activo' : 'Activar'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDesignToDelete(design.id);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoadingDesigns && designs.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">No hay diseños subidos</p>
+                <p className="text-sm mt-2">Arrastra un archivo o haz click arriba</p>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-6">
+              <h4 className="font-bold text-blue-400 mb-2">💡 Instrucciones</h4>
+              <ul className="text-sm text-gray-300 space-y-1">
+                <li>1. Crea tu diseño en Canva (600x450px)</li>
+                <li>2. Exporta como PNG o JPG</li>
+                <li>3. Arrastra el archivo aquí o haz click para seleccionar</li>
+                <li>4. Activa el diseño que quieras usar</li>
+                <li>5. El diseño aparecerá al final de cada tira de fotos</li>
+              </ul>
+            </div>
+          </TabsContent>
+
           {/* TAB: PRINTING */}
-          <TabsContent value="printing" className={TAB_PANEL_CLASS}>
+          <TabsContent value="printing" className="space-y-6">
             {/* Printer Selection */}
             {isLoadingPrinters ? (
               <div className="text-center py-12">
@@ -680,7 +794,7 @@ export default function SettingsScreen() {
             <DialogTitle>¿Restaurar configuración por defecto?</DialogTitle>
             <DialogDescription>
               Esta acción restablecerá todos los valores a su configuración original.
-              No afectará los templates ni eventos guardados.
+              No afectará los diseños subidos.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -689,6 +803,26 @@ export default function SettingsScreen() {
             </Button>
             <Button variant="destructive" onClick={handleReset} disabled={isSaving}>
               {isSaving ? 'Restaurando...' : 'Restaurar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Design Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Eliminar este diseño?</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer. El archivo se eliminará permanentemente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteDesign}>
+              Eliminar
             </Button>
           </DialogFooter>
         </DialogContent>

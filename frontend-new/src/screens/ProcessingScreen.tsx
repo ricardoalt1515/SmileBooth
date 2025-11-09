@@ -25,16 +25,16 @@ export default function ProcessingScreen() {
       try {
         setIsLoading(true);
 
-        // ✅ OBTENER DISEÑO ACTIVO DE CANVA
+        // ✅ OBTENER DISEÑO DEL TEMPLATE ACTIVO
         let designPath: string | null = null;
         try {
-          const activeDesignResponse = await photoboothAPI.designs.getActive();
-          if (activeDesignResponse.active_design) {
-            designPath = activeDesignResponse.active_design.file_path;
-            console.log('✅ Usando diseño:', designPath);
+          const activeTemplate = await photoboothAPI.templates.getActive();
+          if (activeTemplate?.design_file_path) {
+            designPath = activeTemplate.design_file_path;
+            console.log('✅ Usando diseño del template:', designPath);
           }
-        } catch (designError) {
-          console.warn('⚠️  No hay diseño activo, continuando sin diseño');
+        } catch (error) {
+          console.warn('⚠️  No hay template activo con diseño, continuando sin diseño');
         }
 
         // ✅ COMPONER STRIP CON BACKEND

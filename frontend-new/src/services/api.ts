@@ -115,37 +115,6 @@ export const photoboothAPI = {
     },
   },
 
-  // Design endpoints (Canva)
-  designs: {
-    list: async () => {
-      const response = await apiClient.get('/api/designs/list');
-      return response.data; // { designs, active_design }
-    },
-    upload: async (file: File, name?: string) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (name) {
-        formData.append('name', name);
-      }
-      const response = await apiClient.post('/api/designs/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data; // { success, design_id, file_path, message }
-    },
-    setActive: async (designId: string) => {
-      const response = await apiClient.put(`/api/designs/set-active/${designId}`);
-      return response.data; // { success, message, active_design_id }
-    },
-    getActive: async () => {
-      const response = await apiClient.get('/api/designs/active');
-      return response.data; // { active_design: { id, file_path } }
-    },
-    delete: async (designId: string) => {
-      const response = await apiClient.delete(`/api/designs/delete/${designId}`);
-      return response.data; // { success, message }
-    },
-  },
-
   // Settings endpoints
   settings: {
     get: async () => {

@@ -281,16 +281,16 @@ export default function UnifiedBoothScreen() {
       console.log('🎬 Generando preview del strip...');
       console.log('📸 Photo paths:', photoPaths);
       
-      // Obtener diseño activo
+      // Obtener diseño del template activo
       let designPath: string | null = null;
       try {
-        const activeDesignResponse = await photoboothAPI.designs.getActive();
-        if (activeDesignResponse.active_design) {
-          designPath = activeDesignResponse.active_design.file_path;
-          console.log('🎨 Diseño activo:', designPath);
+        const activeTemplate = await photoboothAPI.templates.getActive();
+        if (activeTemplate?.design_file_path) {
+          designPath = activeTemplate.design_file_path;
+          console.log('🎨 Diseño del template:', designPath);
         }
       } catch (err) {
-        console.warn('⚠️ No hay diseño activo');
+        console.warn('⚠️ No hay template activo con diseño');
       }
 
       // Generar preview

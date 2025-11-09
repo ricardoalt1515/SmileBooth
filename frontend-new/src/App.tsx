@@ -162,8 +162,10 @@ function App() {
 
         {/* Settings Modal Overlay */}
         {currentScreen === 'settings' && (
-          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm animate-fade-in overflow-hidden">
-            <SettingsScreen />
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm animate-fade-in overflow-auto">
+            <div className="min-h-full">
+              <SettingsScreen />
+            </div>
           </div>
         )}
       </div>
