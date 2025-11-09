@@ -19,6 +19,12 @@ Frontend de aplicación de escritorio para photobooth construido con tecnología
 - **Tailwind CSS** v4.1+ - Framework CSS utility-first
 - **Zustand** - State management simple y poderoso
 - **Axios** - Cliente HTTP para backend API
+- **react-webcam** - Captura de cámara en React
+- **lucide-react** - Iconos modernos y ligeros
+
+### Audio
+- **Web Speech API** - Voces en español (Text-to-Speech)
+- **Web Audio API** - Efectos de sonido generados en tiempo real
 
 ## 📁 Estructura del Proyecto
 
@@ -155,6 +161,49 @@ Configuración moderna usando `@tailwindcss/vite`:
 - Sin archivo de configuración necesario
 - JIT mode por defecto
 - Tree-shaking automático
+
+## 🔊 Sistema de Audio
+
+### Voces en Español (Text-to-Speech)
+La aplicación utiliza Web Speech API para guiar al usuario con voces en español:
+
+**Mensajes implementados:**
+- 🏠 **StartScreen**: "¡Bienvenido al photobooth! Presiona el botón para comenzar..."
+- ⏱️ **CountdownScreen**: Cuenta regresiva "3, 2, 1, ¡Sonríe!"
+- 📸 **CaptureScreen**: "¡Perfecta! Preparando foto X de Y"
+- ⚙️ **ProcessingScreen**: "Estamos creando tu tira de fotos..."
+- ✅ **SuccessScreen**: "¡Tus fotos están listas! Puedes imprimirlas..."
+
+**Configuración personalizable:**
+- `rate`: Velocidad de voz (0.1 - 10, default: 1.0)
+- `pitch`: Tono de voz (0 - 2, default: 1.0)
+- `volume`: Volumen (0 - 1, default: 1.0)
+
+### Efectos de Sonido
+Generados con Web Audio API para máxima compatibilidad:
+
+- 🔔 **Beep/Click**: Sonido de botones y countdown
+- 📷 **Shutter**: Efecto de cámara al capturar foto
+- 🎉 **Success**: Melodía de éxito (acorde Do mayor)
+- ⏰ **Countdown**: Beeps diferenciados para 3-2-1-GO
+
+### Uso del Hook de Audio
+
+```typescript
+import { useAudio, useSoundEffects } from '../hooks/useAudio';
+
+function MyComponent() {
+  const { speak, stopSpeaking } = useAudio();
+  const { playShutter, playSuccess } = useSoundEffects();
+
+  const handleAction = () => {
+    speak('Hola mundo', { rate: 1.2, pitch: 1.1 });
+    playShutter();
+  };
+
+  return <button onClick={handleAction}>Click</button>;
+}
+```
 
 ## 🔐 Seguridad
 

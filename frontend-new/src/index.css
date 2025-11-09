@@ -1,40 +1,285 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* =================================================================
+   PHOTOBOOTH DESIGN SYSTEM v1.0 - TAILWIND V4 FORMAT
+   Basado en documentación oficial de shadcnblocks.com
+   ================================================================= */
+
+/* CRÍTICO: Custom variant para modo oscuro */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================
+   SHADCN VARIABLES - MODO CLARO (Light Mode)
+   ============================================ */
+
+:root {
+  /* Base Colors */
+  --background: hsl(0 0% 100%);           /* Blanco */
+  --foreground: hsl(0 0% 3.9%);           /* Casi negro */
+
+  /* Card & Container */
+  --card: hsl(0 0% 100%);                 /* Blanco */
+  --card-foreground: hsl(0 0% 3.9%);
+
+  /* Popover & Dropdown */
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 3.9%);
+
+  /* Primary (Magenta Night) */
+  --primary: hsl(330 100% 50%);           /* #ff0080 */
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary */
+  --secondary: hsl(0 0% 96%);
+  --secondary-foreground: hsl(0 0% 9%);
+
+  /* Muted */
+  --muted: hsl(0 0% 96%);
+  --muted-foreground: hsl(0 0% 45.1%);
+
+  /* Accent */
+  --accent: hsl(0 0% 96%);
+  --accent-foreground: hsl(0 0% 9%);
+
+  /* Destructive */
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  /* Borders & Inputs */
+  --border: hsl(0 0% 90%);
+  --input: hsl(0 0% 89.8%);
+  --ring: hsl(0 0% 3.9%);
+
+  /* Border Radius */
+  --radius: 0.75rem;
+
 }
 
-body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #000;
-  color: #fff;
-  overflow: hidden;
+/* ============================================
+   SHADCN VARIABLES - MODO OSCURO (Dark Mode)
+   ESTE ES EL QUE USAMOS POR DEFECTO
+   ============================================ */
+
+.dark {
+  /* Base Colors */
+  --background: hsl(0 0% 3.9%);           /* #0a0a0a - Gris muy oscuro */
+  --foreground: hsl(0 0% 98%);            /* #fafafa - Casi blanco */
+
+  /* Card & Container */
+  --card: hsl(0 0% 10%);                  /* #1a1a1a - MÁS CLARO que background */
+  --card-foreground: hsl(0 0% 98%);
+
+  /* Popover & Dropdown */
+  --popover: hsl(0 0% 10%);
+  --popover-foreground: hsl(0 0% 98%);
+
+  /* Primary (Magenta Night) */
+  --primary: hsl(330 100% 50%);           /* #ff0080 */
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary */
+  --secondary: hsl(0 0% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+
+  /* Muted */
+  --muted: hsl(0 0% 15.9%);
+  --muted-foreground: hsl(0 0% 64.9%);
+
+  /* Accent */
+  --accent: hsl(0 0% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+
+  /* Destructive */
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+
+  /* Borders & Inputs */
+  --border: hsl(0 0% 20%);                /* Más visible */
+  --input: hsl(0 0% 15.9%);
+  --ring: hsl(330 100% 50%);              /* Magenta */
+
+  /* Photobooth Custom */
+  --success: hsl(142 76% 36%);
+  --warning: hsl(38 92% 50%);
+  --error: hsl(0 84% 60%);
+  --info: hsl(199 89% 48%);
+}
+
+/* ============================================
+   SPACING SYSTEM (aplicable globalmente)
+   ============================================ */
+
+:root {
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;  /* 4px */
+  --spacing-2: 0.5rem;   /* 8px */
+  --spacing-3: 0.75rem;  /* 12px */
+  --spacing-4: 1rem;     /* 16px */
+  --spacing-5: 1.25rem;  /* 20px */
+  --spacing-6: 1.5rem;   /* 24px */
+  --spacing-8: 2rem;     /* 32px */
+  --spacing-10: 2.5rem;  /* 40px */
+  --spacing-12: 3rem;    /* 48px */
+  --spacing-16: 4rem;    /* 64px */
+  --spacing-20: 5rem;    /* 80px */
+
+  /* ============================================
+     ANIMATION TOKENS
+     ============================================ */
+
+  --duration-instant: 0ms;
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-slower: 800ms;
+
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-in: cubic-bezier(0.4, 0, 1, 1);
+  --easing-out: cubic-bezier(0, 0, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* ============================================
+     Z-INDEX LAYERS (orden visual consistente)
+     ============================================ */
+
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-fixed: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+  --z-toast: 80;
+  --z-max: 9999;
+
+  /* ============================================
+     TYPOGRAPHY SCALE
+     ============================================ */
+
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ============================================
+     SHADOWS (depth system)
+     ============================================ */
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+  --shadow-glow-magenta: 0 0 20px rgb(255 0 128 / 0.5);
+}
+
+/* ============================================
+   @THEME INLINE - Mapeo para Tailwind v4
+   CRÍTICO: Usa var() para heredar de :root o .dark
+   ============================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* ============================================
+   MODO STAFF (futuro - opcional)
+   ============================================ */
+[data-mode="staff"] {
+  --primary: hsl(220 100% 50%);  /* Azul para diferenciarlo */
+  --ring: hsl(220 100% 50%);
+}
+
+/* ============================================
+   BASE STYLES - SHADCN LAYER
+   Crítico: Esta capa aplica los tokens de color globalmente
+   ============================================ */
+
+@layer base {
+  * {
+    @apply border-border;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
 #root {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
 }
 
-.app {
-  text-align: center;
+/* ============================================
+   UTILITY CLASSES (helpers comunes)
+   ============================================ */
+
+/* Text Utilities */
+.text-brand-magenta {
+  color: var(--brand-magenta);
 }
 
-.app h1 {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+.text-success {
+  color: var(--success);
 }
 
-.app p {
-  font-size: 1.25rem;
-  margin: 0.5rem 0;
+.text-warning {
+  color: var(--warning);
+}
+
+.text-error {
+  color: var(--error);
+}
+
+/* Background Utilities */
+.bg-photobooth-dark {
+  background-color: var(--brand-dark);
+}
+
+/* Glow Effect */
+.glow-magenta {
+  box-shadow: var(--shadow-glow-magenta);
+}
+
+/* Smooth Transitions */
+.transition-smooth {
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--easing-default);
 }

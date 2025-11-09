@@ -49,3 +49,35 @@ RESOURCE_LIMITS = {
     "max_temp_files": 100,  # Limpiar temp si excede
     "cleanup_after_hours": 24,  # Limpiar archivos temp viejos
 }
+
+# URLs de archivos estáticos
+# IMPORTANTE: Estas deben coincidir con los mount points en main.py
+STATIC_URLS = {
+    "data_mount": "/data",  # Mount point del directorio data/
+    "photos_prefix": "/data/photos",  # URL base para fotos
+    "strips_prefix": "/data/strips",  # URL base para strips
+    "designs_prefix": "/data/designs",  # URL base para diseños
+}
+
+
+def get_photo_url(photo_path: Path) -> str:
+    """
+    Convierte un path absoluto de foto a URL relativa.
+    
+    Args:
+        photo_path: Path absoluto de la foto
+        
+    Returns:
+        URL relativa para acceder a la foto vía HTTP
+        
+    Example:
+        /path/to/data/photos/session/photo.jpg -> /data/photos/session/photo.jpg
+    """
+    try:
+        # Obtener path relativo desde DATA_DIR
+        rel_path = photo_path.relative_to(DATA_DIR)
+        # Construir URL con el mount point correcto
+        return f"{STATIC_URLS['data_mount']}/{rel_path.as_posix()}"
+    except ValueError:
+        # Si el path no es relativo a DATA_DIR, retornar path completo
+        return f"{STATIC_URLS['data_mount']}/{photo_path.name}"

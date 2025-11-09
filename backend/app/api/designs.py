@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from PIL import Image
 
 from app.config import DESIGNS_DIR
+from app.api.settings import load_settings, save_settings
+from app.schemas.settings import SettingsUpdate
 
 router = APIRouter(prefix="/api/designs", tags=["designs"])
 
@@ -35,9 +37,8 @@ class UploadResponse(BaseModel):
     message: str
 
 
-# Variable global para diseño activo (simple para MVP)
-# TODO: Mover a database en producción
-_active_design: str | None = None
+# ========== ESTADO ==========
+# Diseño activo ahora se guarda en settings.json (persistente)
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -110,6 +111,10 @@ async def list_designs():
     Lista todos los diseños disponibles.
     """
     try:
+        # Leer diseño activo de settings.json (persistente)
+        settings = load_settings()
+        active_design_id = settings.active_design_id
+        
         designs: list[DesignInfo] = []
         
         # Buscar en carpeta custom
@@ -128,7 +133,7 @@ async def list_designs():
                         name=file_path.name,
                         file_path=str(file_path),
                         preview_url=f"/api/designs/preview/{design_id}",
-                        is_active=(design_id == _active_design),
+                        is_active=(design_id == active_design_id),
                         created_at=created_at.isoformat()
                     ))
         
@@ -151,9 +156,8 @@ async def list_designs():
 async def set_active_design(design_id: str):
     """
     Activa un diseño para usar en las próximas sesiones.
+    Persiste en settings.json para sobrevivir reinicios.
     """
-    global _active_design
-    
     try:
         # Buscar diseño
         custom_dir = DESIGNS_DIR / "custom"
@@ -162,12 +166,14 @@ async def set_active_design(design_id: str):
         if not design_files:
             raise HTTPException(404, f"Diseño no encontrado: {design_id}")
         
-        # Activar
-        _active_design = design_id
+        # Guardar en settings.json (persistente)
+        settings = load_settings()
+        settings.active_design_id = design_id
+        save_settings(settings)
         
         return {
             "success": True,
-            "message": f"Diseño '{design_id}' activado",
+            "message": f"Diseño '{design_id}' activado y guardado",
             "active_design_id": design_id
         }
         
@@ -180,13 +186,17 @@ async def set_active_design(design_id: str):
 @router.get("/active")
 async def get_active_design():
     """
-    Obtiene el diseño actualmente activo.
+    Obtiene el diseño actualmente activo desde settings.json.
     """
-    if _active_design is None:
+    # Leer de settings.json (persistente)
+    settings = load_settings()
+    active_id = settings.active_design_id
+    
+    if active_id is None:
         return {"active_design": None}
     
     custom_dir = DESIGNS_DIR / "custom"
-    design_files = list(custom_dir.glob(f"{_active_design}.*"))
+    design_files = list(custom_dir.glob(f"{active_id}.*"))
     
     if not design_files:
         return {"active_design": None}
@@ -195,10 +205,38 @@ async def get_active_design():
     
     return {
         "active_design": {
-            "id": _active_design,
+            "id": active_id,
             "file_path": str(file_path)
         }
     }
+
+
+@router.get("/preview/{design_id}")
+async def get_design_preview(design_id: str):
+    """
+    Sirve la imagen de preview de un diseño.
+    """
+    from fastapi.responses import FileResponse
+    
+    try:
+        custom_dir = DESIGNS_DIR / "custom"
+        design_files = list(custom_dir.glob(f"{design_id}.*"))
+        
+        if not design_files:
+            raise HTTPException(404, f"Diseño no encontrado: {design_id}")
+        
+        file_path = design_files[0]
+        
+        return FileResponse(
+            file_path,
+            media_type=f"image/{file_path.suffix[1:]}",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error al obtener preview: {str(e)}")
 
 
 @router.delete("/delete/{design_id}")

@@ -3,6 +3,7 @@ API de Cámara - Endpoints optimizados
 """
 from fastapi import APIRouter, HTTPException
 from app.services.camera_service import CameraService
+from app.config import get_photo_url
 from app.schemas.camera import (
     CaptureRequest,
     CaptureResponse,
@@ -25,10 +26,13 @@ async def capture_photo(request: CaptureRequest):
             session_id=request.session_id
         )
         
+        # Convertir path absoluto a URL usando función centralizada (DRY principle)
+        photo_url = get_photo_url(filepath)
+        
         return CaptureResponse(
             success=True,
             session_id=session_id,
-            file_path=str(filepath)
+            file_path=photo_url
         )
     
     except Exception as e:

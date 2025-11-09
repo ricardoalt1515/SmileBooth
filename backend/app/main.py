@@ -6,10 +6,12 @@ PhotoBooth API - Optimizada para Bajos Recursos
 """
 import gc
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.api import camera, image, print as print_api, designs
+from app.api import camera, image, print as print_api, designs, settings, gallery, presets, templates
 from app.config import API_CONFIG
 
 
@@ -43,7 +45,7 @@ app = FastAPI(
 # CORS simple (solo para desarrollo local)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],  # Permitir todos los orígenes para desarrollo (Electron + Vite)
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
@@ -53,7 +55,17 @@ app.add_middleware(
 app.include_router(camera.router)
 app.include_router(image.router)
 app.include_router(print_api.router)
-app.include_router(designs.router)
+app.include_router(designs.router)  # Keep for backward compatibility
+app.include_router(templates.router)  # New templates API
+app.include_router(settings.router)
+app.include_router(gallery.router)
+app.include_router(presets.router)
+
+# Servir archivos estáticos (fotos capturadas)
+# Las fotos se guardan en /photobooth/data/ (raíz del proyecto, no en backend/data/)
+data_dir = Path(__file__).parent.parent.parent / "data"
+data_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/data", StaticFiles(directory=str(data_dir)), name="data")
 
 
 @app.get("/")

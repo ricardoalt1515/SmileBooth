@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -42,6 +42,7 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false, // Security: disable node integration
       contextIsolation: true, // Security: enable context isolation
+      webSecurity: false, // Allow loading images from localhost backend
       backgroundThrottling: false, // Important for photobooth - keep animations running
       spellcheck: false, // Disable spellcheck for performance
     },
@@ -77,6 +78,21 @@ const createWindow = () => {
       global.gc();
     }
   });
+
+  // Register global hotkey for settings
+  const settingsHotkey = 'CommandOrControl+Shift+S';
+  const registered = globalShortcut.register(settingsHotkey, () => {
+    console.log('Settings hotkey pressed');
+    mainWindow.webContents.send('open-settings');
+  });
+
+  if (!registered) {
+    console.warn(`Failed to register hotkey: ${settingsHotkey}`);
+  } else {
+    console.log(`✅ Hotkey registered: ${settingsHotkey}`);
+  }
+
+  return mainWindow;
 };
 
 // This method will be called when Electron has finished
@@ -98,9 +114,17 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  // Unregister all shortcuts when app is closing
+  globalShortcut.unregisterAll();
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Unregister shortcuts when app is quitting
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 // In this file you can include the rest of your app's specific main process
