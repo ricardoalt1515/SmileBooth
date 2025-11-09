@@ -252,6 +252,10 @@ export const photoboothAPI = {
       const response = await apiClient.get('/api/templates/list');
       return response.data; // { templates: Template[], active_template: Template | null }
     },
+    getActive: async () => {
+      const response = await apiClient.get('/api/templates/list');
+      return response.data.active_template || null;
+    },
     get: async (templateId: string) => {
       const response = await apiClient.get(`/api/templates/${templateId}`);
       return response.data; // Template object
