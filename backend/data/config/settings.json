@@ -1,5 +1,4 @@
 {
-  "version": "1.0",
   "photos_to_take": 4,
   "countdown_seconds": 5,
   "backend_url": null,
@@ -9,5 +8,10 @@
   "voice_rate": 1.0,
   "voice_pitch": 1.0,
   "voice_volume": 1.0,
-  "auto_reset_seconds": 30
+  "auto_reset_seconds": 30,
+  "strip_layout": null,
+  "print_mode": null,
+  "photo_spacing": null,
+  "strip_width": null,
+  "strip_height": null
 }
