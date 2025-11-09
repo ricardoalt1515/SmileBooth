@@ -43,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 // Constants - Avoid magic numbers
 const DEFAULT_BACKGROUND_COLOR = '#FFFFFF';
@@ -299,34 +300,12 @@ export default function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
-      <DialogContent 
-        className="max-w-6xl max-h-[90vh] overflow-y-auto"
+      <DialogContent
+        className="max-w-7xl max-h-[95vh] overflow-y-auto p-8"
         onKeyDown={(e) => {
           // Prevenir que Space active la cámara cuando estás escribiendo
           if (e.key === ' ' || e.code === 'Space') {
             e.stopPropagation();
-          }
-        }}
-        onPointerDownOutside={(e) => {
-          // Permitir clicks en portals de Radix UI (Select dropdowns)
-          const target = e.target as HTMLElement;
-          const isRadixPortal = target.closest('[data-radix-popper-content-wrapper]') || 
-                                target.closest('[data-radix-select-content]') ||
-                                target.closest('[role="listbox"]');
-          
-          if (!isRadixPortal) {
-            e.preventDefault();
-          }
-        }}
-        onInteractOutside={(e) => {
-          // Permitir interacción con portals de Radix UI
-          const target = e.target as HTMLElement;
-          const isRadixPortal = target.closest('[data-radix-popper-content-wrapper]') || 
-                                target.closest('[data-radix-select-content]') ||
-                                target.closest('[role="listbox"]');
-          
-          if (!isRadixPortal) {
-            e.preventDefault();
           }
         }}
       >
@@ -340,12 +319,12 @@ export default function TemplateDialog({
         </DialogHeader>
 
         {/* Layout de 2 columnas */}
-        <div className="grid grid-cols-2 gap-8 py-4">
+        <div className="grid grid-cols-2 gap-12 py-6">
           {/* COLUMNA IZQUIERDA: Formulario */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Template Name */}
             <div className="space-y-2">
-            <Label htmlFor="name">
+            <Label htmlFor="name" className="text-base font-semibold">
               Nombre del Template <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -355,9 +334,13 @@ export default function TemplateDialog({
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className={errors.find(e => e.field === 'name') ? 'border-destructive' : ''}
             />
-            {errors.find(e => e.field === 'name') && (
+            {errors.find(e => e.field === 'name') ? (
               <p className="text-sm text-destructive">
                 {errors.find(e => e.field === 'name')?.message}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Un nombre descriptivo para identificar este template
               </p>
             )}
           </div>
@@ -365,14 +348,14 @@ export default function TemplateDialog({
           {/* Layout Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="layout">Layout</Label>
+              <Label htmlFor="layout" className="text-sm font-medium">Layout</Label>
               <Select
                 value={formData.layout}
-                onValueChange={(value: LayoutType) => 
+                onValueChange={(value: LayoutType) =>
                   setFormData({ ...formData, layout: value })
                 }
               >
-                <SelectTrigger id="layout">
+                <SelectTrigger id="layout" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -390,14 +373,14 @@ export default function TemplateDialog({
 
             {/* Design Position */}
             <div className="space-y-2">
-              <Label htmlFor="design_position">Posición del Diseño</Label>
+              <Label htmlFor="design_position" className="text-sm font-medium">Posición del Diseño</Label>
               <Select
                 value={formData.design_position}
-                onValueChange={(value: DesignPositionType) => 
+                onValueChange={(value: DesignPositionType) =>
                   setFormData({ ...formData, design_position: value })
                 }
               >
-                <SelectTrigger id="design_position">
+                <SelectTrigger id="design_position" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -415,7 +398,7 @@ export default function TemplateDialog({
           <div className="grid grid-cols-2 gap-4">
             {/* Background Color */}
             <div className="space-y-2">
-              <Label htmlFor="background_color">Color de Fondo</Label>
+              <Label htmlFor="background_color" className="text-sm font-medium">Color de Fondo</Label>
               <div className="flex gap-2">
                 <Input
                   id="background_color"
@@ -436,7 +419,7 @@ export default function TemplateDialog({
 
             {/* Photo Spacing */}
             <div className="space-y-2">
-              <Label htmlFor="photo_spacing">
+              <Label htmlFor="photo_spacing" className="text-sm font-medium">
                 Espaciado ({MIN_PHOTO_SPACING}-{MAX_PHOTO_SPACING}px)
               </Label>
               <Input
@@ -456,8 +439,11 @@ export default function TemplateDialog({
 
           {/* Design Upload */}
           <div className="space-y-2">
-            <Label>Diseño de Canva (PNG/JPG)</Label>
-            
+            <Label className="text-sm font-medium">Diseño de Canva (PNG/JPG)</Label>
+            <p className="text-xs text-muted-foreground">
+              Sube tu diseño personalizado para incluir en el strip de fotos
+            </p>
+
             {/* Upload Zone */}
             <div
               onDragOver={handleDragOver}
@@ -517,19 +503,28 @@ export default function TemplateDialog({
 
           {/* COLUMNA DERECHA: Preview Grande */}
           <div className="space-y-4">
-            <div className="sticky top-0">
-              <Label className="text-lg font-semibold">Vista Previa</Label>
-              <p className="text-sm text-muted-foreground mb-4">
+            <div className="sticky top-0 bg-background pb-4 z-10">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-lg font-semibold">Vista Previa</Label>
+                <Badge variant="outline" className="text-xs">
+                  {getPhotoCountDisplay()}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
                 Así se verá tu strip de fotos
               </p>
-              
-              {/* Preview Container */}
-              <div className="border-2 border-dashed rounded-lg p-6 bg-muted/20 flex items-center justify-center min-h-[600px]">
-                <div 
-                  className="relative bg-white rounded-lg shadow-2xl"
-                  style={{ 
-                    width: '300px',
-                    backgroundColor: formData.background_color 
+            </div>
+
+            {/* Preview Container */}
+            <div className="relative border-2 border-border rounded-xl p-8 bg-muted/30 flex items-center justify-center min-h-[700px]">
+                <Badge variant="secondary" className="absolute top-4 right-4 text-xs">
+                  Strip 2x6"
+                </Badge>
+                <div
+                  className="relative bg-white rounded-lg shadow-2xl transition-all duration-300"
+                  style={{
+                    width: '400px',
+                    backgroundColor: formData.background_color
                   }}
                 >
                   {/* Renderizar preview según layout */}
@@ -548,7 +543,7 @@ export default function TemplateDialog({
                         </div>
                       )}
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="bg-gray-200 aspect-[4/3] rounded-lg flex items-center justify-center text-lg font-bold text-gray-500 border-2 border-gray-300">
+                        <div key={i} className="bg-muted aspect-[4/3] rounded-lg flex items-center justify-center text-lg font-bold text-muted-foreground border-2 border-border transition-all duration-300">
                           Foto {i}
                         </div>
                       ))}
@@ -579,7 +574,7 @@ export default function TemplateDialog({
                         </div>
                       )}
                       {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="bg-gray-200 aspect-[4/3] rounded flex items-center justify-center text-base font-semibold text-gray-500 border border-gray-300">
+                        <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-base font-semibold text-muted-foreground border border-border transition-all duration-300">
                           Foto {i}
                         </div>
                       ))}
@@ -607,7 +602,7 @@ export default function TemplateDialog({
                         </div>
                       )}
                       {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <div key={i} className="bg-gray-200 aspect-[4/3] rounded flex items-center justify-center text-xs font-semibold text-gray-500 border border-gray-300">
+                        <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-xs font-semibold text-muted-foreground border border-border transition-all duration-300">
                           {i}
                         </div>
                       ))}
@@ -627,7 +622,7 @@ export default function TemplateDialog({
                     <div className="p-3">
                       <div className="grid grid-cols-2 gap-2 mb-2">
                         {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="bg-gray-200 aspect-square rounded flex items-center justify-center text-sm font-semibold text-gray-500 border border-gray-300">
+                          <div key={i} className="bg-muted aspect-square rounded flex items-center justify-center text-sm font-semibold text-muted-foreground border border-border transition-all duration-300">
                             {i}
                           </div>
                         ))}
@@ -667,7 +662,6 @@ export default function TemplateDialog({
                   </div>
                 </div>
               </div>
-            </div>
           </div>
           {/* FIN COLUMNA DERECHA */}
         </div>
@@ -675,7 +669,7 @@ export default function TemplateDialog({
         <DialogFooter>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
