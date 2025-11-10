@@ -31,8 +31,11 @@ class EventPreset(BaseModel):
     voice_pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="Tono de voz")
     voice_volume: float = Field(default=1.0, ge=0.0, le=1.0, description="Volumen de voz")
     
-    # Template asociado (nuevo modelo simplificado)
-    template_id: Optional[str] = Field(None, description="ID del template a usar")
+    # Template asociado
+    template_id: Optional[str] = Field(None, description="ID del template asociado")
+    template_name: Optional[str] = Field(None, description="Nombre del template asociado")
+    template_layout: Optional[str] = Field(None, description="Layout del template")
+    template_preview_url: Optional[str] = Field(None, description="Preview del template")
     
     # Backward compatibility - mantener design_id por ahora
     design_id: Optional[str] = Field(None, description="ID del diseño de Canva asociado (deprecated)")

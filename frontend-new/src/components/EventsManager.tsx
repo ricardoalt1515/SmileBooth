@@ -23,6 +23,7 @@ import {
   EVENT_TYPE_LABELS,
   EVENT_TYPE_COLORS
 } from '../types/preset';
+import { LAYOUT_LABELS } from '../types/template';
 import {
   Card,
   CardContent,
@@ -61,6 +62,8 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
   const [editingPreset, setEditingPreset] = useState<EventPreset | null>(null);
   
   const toast = useToastContext();
+  const getTemplateLayoutLabel = (layout?: string | null) =>
+    layout ? LAYOUT_LABELS[layout as keyof typeof LAYOUT_LABELS] ?? null : null;
 
   // Cargar presets al montar
   const loadPresets = useCallback(async () => {
@@ -218,15 +221,20 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
                 <div className="text-xs text-muted-foreground">Auto-reset</div>
               </div>
               <div className="text-center">
-                {activePreset.design_name ? (
+                {activePreset.template_name ? (
                   <>
                     <ImageIcon className="w-6 h-6 mx-auto text-primary" />
-                    <div className="text-xs text-muted-foreground truncate">{activePreset.design_name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{activePreset.template_name}</div>
+                    {getTemplateLayoutLabel(activePreset.template_layout) && (
+                      <div className="text-[10px] text-muted-foreground">
+                        {getTemplateLayoutLabel(activePreset.template_layout)}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
                     <div className="text-2xl font-bold text-muted-foreground">—</div>
-                    <div className="text-xs text-muted-foreground">Sin diseño</div>
+                    <div className="text-xs text-muted-foreground">Sin template</div>
                   </>
                 )}
               </div>
@@ -314,15 +322,17 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
                       <div className="text-muted-foreground">count</div>
                     </div>
                     <div>
-                      {preset.design_name ? (
+                      {preset.template_name ? (
                         <>
                           <ImageIcon className="w-4 h-4 mx-auto" />
-                          <div className="text-muted-foreground truncate">diseño</div>
+                          <div className="text-muted-foreground truncate">
+                            {getTemplateLayoutLabel(preset.template_layout) || 'template'}
+                          </div>
                         </>
                       ) : (
                         <>
                           <div className="font-semibold">—</div>
-                          <div className="text-muted-foreground">diseño</div>
+                          <div className="text-muted-foreground">template</div>
                         </>
                       )}
                     </div>
@@ -415,8 +425,8 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
             <div>
               <h4 className="font-semibold text-sm mb-1">💡 Cómo usar Eventos</h4>
               <p className="text-sm text-muted-foreground">
-                1. Sube tus diseños en la pestaña "Diseños"<br />
-                2. Crea un evento y selecciona el diseño a usar<br />
+                1. Configura tus templates en la pestaña "Templates"<br />
+                2. Crea un evento y selecciona el template a usar<br />
                 3. Activa el evento cuando lo necesites<br />
                 ¡Todo se aplica automáticamente!
               </p>

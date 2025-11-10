@@ -13,6 +13,7 @@ import { Calendar, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI from '../services/api';
 import { EventPreset, EVENT_TYPE_LABELS } from '../types/preset';
+import { LAYOUT_LABELS, type Template } from '../types/template';
 import {
   Dialog,
   DialogContent,
@@ -33,14 +34,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-interface Design {
-  id: string;
-  name: string;
-  file_path: string;
-  preview_url: string;
-  is_active: boolean;
-}
-
 interface EventDialogSimpleProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,7 +48,7 @@ interface FormData {
   photos_to_take: number;
   countdown_seconds: number;
   auto_reset_seconds: number;
-  design_id?: string;
+  template_id?: string;
   notes: string;
   client_name: string;
   client_contact: string;
@@ -76,19 +69,21 @@ export default function EventDialogSimple({
     photos_to_take: 3,
     countdown_seconds: 5,
     auto_reset_seconds: 30,
+    template_id: undefined,
     notes: '',
     client_name: '',
     client_contact: '',
   });
   
-  const [designs, setDesigns] = useState<Design[]>([]);
-  const [isLoadingDesigns, setIsLoadingDesigns] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedTemplate = templates.find((template) => template.id === formData.template_id);
 
-  // Load designs when dialog opens
+  // Load templates when dialog opens
   useEffect(() => {
     if (open) {
-      loadDesigns();
+      loadTemplates();
     }
   }, [open]);
 
@@ -102,7 +97,7 @@ export default function EventDialogSimple({
         photos_to_take: editingPreset.photos_to_take,
         countdown_seconds: editingPreset.countdown_seconds,
         auto_reset_seconds: editingPreset.auto_reset_seconds,
-        design_id: editingPreset.design_id,
+        template_id: editingPreset.template_id,
         notes: editingPreset.notes || '',
         client_name: editingPreset.client_name || '',
         client_contact: editingPreset.client_contact || '',
@@ -115,6 +110,7 @@ export default function EventDialogSimple({
         photos_to_take: 3,
         countdown_seconds: 5,
         auto_reset_seconds: 30,
+        template_id: undefined,
         notes: '',
         client_name: '',
         client_contact: '',
@@ -122,16 +118,16 @@ export default function EventDialogSimple({
     }
   }, [editingPreset, open]);
 
-  const loadDesigns = async () => {
-    setIsLoadingDesigns(true);
+  const loadTemplates = async () => {
+    setIsLoadingTemplates(true);
     try {
-      const data = await photoboothAPI.designs.list();
-      setDesigns(data.designs);
+      const data = await photoboothAPI.templates.list();
+      setTemplates(data.templates);
     } catch (error) {
-      console.error('Error loading designs:', error);
-      toast.error('Error cargando diseños');
+      console.error('Error loading templates:', error);
+      toast.error('Error cargando templates');
     } finally {
-      setIsLoadingDesigns(false);
+      setIsLoadingTemplates(false);
     }
   };
 
@@ -155,7 +151,7 @@ export default function EventDialogSimple({
         voice_rate: 1.0,
         voice_pitch: 1.0,
         voice_volume: 1.0,
-        design_id: formData.design_id,
+        template_id: formData.template_id,
         notes: formData.notes || undefined,
         client_name: formData.client_name || undefined,
         client_contact: formData.client_contact || undefined,
@@ -242,36 +238,64 @@ export default function EventDialogSimple({
             </div>
           </div>
 
-          {/* Diseño */}
-          <div className="space-y-2">
-            <Label htmlFor="design">Diseño/Template a Usar</Label>
-            {isLoadingDesigns ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Cargando diseños...
+          {/* Template */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="template">Template a usar</Label>
+              {isLoadingTemplates ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Cargando templates...
+                </div>
+              ) : (
+                <Select
+                  value={formData.template_id || 'none'}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, template_id: value === 'none' ? undefined : value })
+                  }
+                >
+                  <SelectTrigger id="template">
+                    <SelectValue placeholder="Selecciona un template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin template</SelectItem>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name} • {LAYOUT_LABELS[template.layout]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedTemplate && (
+              <div className="flex items-center gap-4 rounded-lg border bg-muted/40 p-4">
+                {selectedTemplate.design_file_path ? (
+                  <img
+                    src={photoboothAPI.templates.getPreview(selectedTemplate.id)}
+                    alt={selectedTemplate.name}
+                    className="h-20 w-auto rounded-md border"
+                  />
+                ) : (
+                  <div className="h-20 w-20 rounded-md border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground">
+                    Sin preview
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold">{selectedTemplate.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {LAYOUT_LABELS[selectedTemplate.layout]}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTemplate.design_position === 'bottom' ? 'Diseño abajo' : `Diseño ${selectedTemplate.design_position}`}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <Select
-                value={formData.design_id || 'none'}
-                onValueChange={(value) => 
-                  setFormData({ ...formData, design_id: value === 'none' ? undefined : value })
-                }
-              >
-                <SelectTrigger id="design">
-                  <SelectValue placeholder="Selecciona un diseño" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin diseño</SelectItem>
-                  {designs.map((design) => (
-                    <SelectItem key={design.id} value={design.id}>
-                      {design.name} {design.is_active && '(Activo)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             )}
+
             <p className="text-xs text-muted-foreground">
-              💡 Sube diseños en la pestaña "Diseños"
+              💡 Crea tus templates en la pestaña "Templates"
             </p>
           </div>
 

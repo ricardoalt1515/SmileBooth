@@ -18,12 +18,60 @@ from app.models.preset import (
     PresetActivateResponse
 )
 from app.api.settings import load_settings, save_settings
-from app.schemas.settings import SettingsUpdate
+from app.api.templates import (
+    load_templates_db,
+    save_templates_db,
+    deactivate_all_templates,
+)
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
 
 # Archivo de persistencia de presets
 PRESETS_FILE = DATA_DIR / "presets.json"
+
+
+def resolve_template_metadata(template_id: Optional[str]) -> dict[str, Optional[str]]:
+    """
+    Obtener metadatos del template para guardarlos junto al preset.
+    Falla rápido si el template no existe para evitar referencias huérfanas.
+    """
+    if not template_id:
+        return {}
+
+    templates = load_templates_db()
+    template = templates.get(template_id)
+
+    if not template:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template '{template_id}' no encontrado"
+        )
+
+    preview_url = f"/api/templates/{template_id}/preview" if template.design_file_path else None
+
+    return {
+        "template_id": template_id,
+        "template_name": template.name,
+        "template_layout": template.layout,
+        "template_preview_url": preview_url,
+    }
+
+
+def activate_template_if_needed(template_id: Optional[str]) -> None:
+    """Sincroniza el template activo con el preset seleccionando."""
+    if not template_id:
+        return
+
+    templates = load_templates_db()
+    if template_id not in templates:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template '{template_id}' no encontrado"
+        )
+
+    deactivate_all_templates(templates)
+    templates[template_id].is_active = True
+    save_templates_db(templates)
 
 
 def load_presets() -> list[EventPreset]:
@@ -71,20 +119,18 @@ def apply_preset_to_settings(preset: EventPreset) -> None:
     Esto sincroniza el preset activo con la configuración global
     """
     settings = load_settings()
+
+    settings.photos_to_take = preset.photos_to_take
+    settings.countdown_seconds = preset.countdown_seconds
+    settings.auto_reset_seconds = preset.auto_reset_seconds
+    settings.audio_enabled = preset.audio_enabled
+    settings.voice_rate = preset.voice_rate
+    settings.voice_pitch = preset.voice_pitch
+    settings.voice_volume = preset.voice_volume
+    settings.active_design_id = preset.design_id
+    settings.active_template_id = preset.template_id
     
-    # Actualizar settings con valores del preset
-    settings_update = SettingsUpdate(
-        photos_to_take=preset.photos_to_take,
-        countdown_seconds=preset.countdown_seconds,
-        auto_reset_seconds=preset.auto_reset_seconds,
-        audio_enabled=preset.audio_enabled,
-        voice_rate=preset.voice_rate,
-        voice_pitch=preset.voice_pitch,
-        voice_volume=preset.voice_volume,
-        active_design_id=preset.design_id
-    )
-    
-    save_settings(settings_update)
+    save_settings(settings)
 
 
 @router.get("", response_model=PresetsListResponse)
@@ -138,6 +184,8 @@ async def create_preset(preset_data: PresetCreate):
     design_path = None
     design_preview_url = None
     
+    template_fields = resolve_template_metadata(preset_data.template_id)
+
     if preset_data.design_id:
         # Buscar el diseño en el directorio
         design_files = list(DESIGNS_DIR.glob(f"{preset_data.design_id}*"))
@@ -170,6 +218,10 @@ async def create_preset(preset_data: PresetCreate):
         is_default=False
     )
     
+    # Adjuntar metadatos del template (si aplica)
+    if template_fields:
+        new_preset = new_preset.model_copy(update=template_fields)
+    
     presets.append(new_preset)
     save_presets(presets)
     
@@ -196,6 +248,19 @@ async def update_preset(preset_id: str, preset_update: PresetUpdate):
     existing_preset = presets[preset_index]
     update_data = preset_update.model_dump(exclude_unset=True)
     
+    # Si se actualiza el template, sincronizar metadatos
+    if 'template_id' in update_data:
+        if update_data['template_id']:
+            template_fields = resolve_template_metadata(update_data['template_id'])
+        else:
+            template_fields = {
+                'template_id': None,
+                'template_name': None,
+                'template_layout': None,
+                'template_preview_url': None,
+            }
+        update_data.update(template_fields)
+
     # Si se actualiza el design_id, buscar info del diseño
     if 'design_id' in update_data and update_data['design_id']:
         design_files = list(DESIGNS_DIR.glob(f"{update_data['design_id']}*"))
@@ -215,6 +280,7 @@ async def update_preset(preset_id: str, preset_update: PresetUpdate):
     
     # Si el preset está activo, aplicar cambios a settings
     if updated_preset.is_active:
+        activate_template_if_needed(updated_preset.template_id)
         apply_preset_to_settings(updated_preset)
     
     return updated_preset
@@ -248,6 +314,9 @@ async def activate_preset(preset_id: str):
     
     # Guardar cambios
     save_presets(presets)
+
+    # Activar template vinculado (si aplica)
+    activate_template_if_needed(preset_to_activate.template_id)
     
     # Aplicar configuración a settings.json
     apply_preset_to_settings(preset_to_activate)

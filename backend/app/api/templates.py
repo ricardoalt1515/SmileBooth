@@ -15,7 +15,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from PIL import Image
 
-from app.config import DESIGNS_DIR
+from app.config import DESIGNS_DIR, DATA_DIR
 from app.models.template import (
     Template,
     TemplateCreate,
@@ -379,13 +379,16 @@ async def upload_template_design(
         
         img.close()
         
+        # Convert to relative path from /data/
+        relative_path = "/" + str(file_path.relative_to(DATA_DIR.parent))
+        
         # Update template
-        templates[template_id].design_file_path = str(file_path)
+        templates[template_id].design_file_path = relative_path
         save_templates_db(templates)
         
         return UploadDesignResponse(
             success=True,
-            file_path=str(file_path),
+            file_path=relative_path,
             message=f"Design uploaded for template '{templates[template_id].name}'"
         )
         
@@ -414,6 +417,16 @@ async def delete_template(template_id: str):
             raise HTTPException(404, f"Template not found: {template_id}")
         
         template = templates[template_id]
+        
+        # Fail fast if template is active (business rule)
+        if template.is_active:
+            raise HTTPException(
+                400, 
+                f"Cannot delete active template '{template.name}'. Deactivate it first."
+            )
+        
+        # TODO: Check if template is used by any event/preset
+        # This would require checking presets.json for template_id references
         
         # Delete design file if exists
         if template.design_file_path:

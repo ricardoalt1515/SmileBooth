@@ -2,7 +2,7 @@
  * Tipos para Presets/Eventos
  * Sincronizados con el backend
  */
-
+import type { LayoutType } from './template';
 export interface EventPreset {
   id: string;
   name: string;
@@ -20,7 +20,11 @@ export interface EventPreset {
   voice_pitch: number;
   voice_volume: number;
   
-  // Diseño asociado
+  // Template/diseño asociado
+  template_id?: string;
+  template_name?: string;
+  template_layout?: LayoutType;
+  template_preview_url?: string | null;
   design_id?: string;
   design_name?: string;
   design_path?: string;

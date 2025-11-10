@@ -1,8 +1,21 @@
 """
 Servicio de composición de imágenes - OPTIMIZADO
+
+Características:
 - Procesamiento en chunks
 - Liberación agresiva de memoria
 - Compresión eficiente
+- Dimensiones dinámicas según número de fotos (1-6 fotos)
+- Sin magic numbers (todos los valores tienen nombres descriptivos)
+- Cálculo automático de altura del canvas
+- DRY: reutilización de constantes
+
+Clean Code Principles Applied:
+- Avoid magic numbers: todas las constantes con nombres claros
+- Good naming: variables descriptivas (STRIP_WIDTH, TOP_MARGIN, etc.)
+- Fail fast: validación temprana del número de fotos
+- One purpose per variable: cada variable tiene un propósito claro
+- Functions return results: no side effects, retorna Path
 """
 import gc
 from pathlib import Path
@@ -12,6 +25,27 @@ from PIL import Image, ImageDraw, ImageFont
 from app.config import IMAGE_CONFIG, STRIPS_DIR
 
 
+def hex_to_rgb(hex_color: str) -> tuple:
+    """
+    Convierte color hexadecimal a tupla RGB.
+    
+    Args:
+        hex_color: Color en formato hex (#RRGGBB o RRGGBB)
+        
+    Returns:
+        Tupla (R, G, B) con valores 0-255
+        
+    Example:
+        hex_to_rgb("#c60c0c") -> (198, 12, 12)
+        hex_to_rgb("ffffff") -> (255, 255, 255)
+    """
+    # Remover '#' si existe
+    hex_color = hex_color.lstrip('#')
+    
+    # Convertir a RGB
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
 class ImageService:
     """Servicio ligero de composición de tiras"""
     
@@ -19,30 +53,67 @@ class ImageService:
     def compose_strip(
         photo_paths: List[Path],
         design_path: Optional[Path] = None,
-        session_id: str = None
+        session_id: str = None,
+        # Template metadata (optional)
+        layout: Optional[str] = None,
+        design_position: Optional[str] = None,
+        background_color: Optional[str] = None,
+        photo_spacing: Optional[int] = None
     ) -> Path:
         """
-        Compone una tira de 3 fotos + diseño personalizado.
+        Compone una tira de fotos + diseño personalizado.
+        Soporta de 1 a 6 fotos dependiendo del layout.
         Optimizado para liberar memoria progresivamente.
+        
+        Args:
+            photo_paths: Lista de rutas de fotos
+            design_path: Ruta del diseño (opcional)
+            session_id: ID de sesión para organizar archivos
+            layout: Layout del template (ej: "4x1-vertical")
+            design_position: Posición del diseño ("top", "bottom")
+            background_color: Color de fondo en hex (ej: "#ffffff")
+            photo_spacing: Espaciado entre fotos en px
+        
+        Returns:
+            Path del strip generado
         """
-        if len(photo_paths) != 3:
-            raise ValueError("Se requieren exactamente 3 fotos")
+        # Fail fast: validar número de fotos
+        if not photo_paths or len(photo_paths) > 6:
+            raise ValueError(f"Se requieren entre 1 y 6 fotos, recibido: {len(photo_paths)}")
         
-        # Configuración
-        width = IMAGE_CONFIG["strip_width"]
-        height = IMAGE_CONFIG["strip_height"]
-        photo_height = IMAGE_CONFIG["photo_height"]
-        design_height = IMAGE_CONFIG["design_height"]
-        spacing = 5
+        # Configuración base (evitar magic numbers, usar defaults si no se proveen)
+        STRIP_WIDTH = IMAGE_CONFIG["strip_width"]
+        BASE_PHOTO_HEIGHT = IMAGE_CONFIG["photo_height"]
+        DESIGN_HEIGHT = IMAGE_CONFIG["design_height"]
+        TOP_MARGIN = 30
+        BOTTOM_MARGIN = 30
+        PHOTO_SPACING = photo_spacing if photo_spacing is not None else 5
         
-        # Crear canvas blanco
-        strip = Image.new('RGB', (width, height), 'white')
+        # Convertir color de fondo de hex a RGB (PIL requiere tupla RGB)
+        if background_color and background_color.startswith('#'):
+            BACKGROUND_COLOR = hex_to_rgb(background_color)
+            print(f"🎨 Color de fondo: {background_color} -> RGB{BACKGROUND_COLOR}")
+        elif background_color:
+            BACKGROUND_COLOR = background_color  # Ya es nombre de color o tupla
+            print(f"🎨 Color de fondo: {BACKGROUND_COLOR}")
+        else:
+            BACKGROUND_COLOR = 'white'  # Default
+            print(f"🎨 Color de fondo: white (default)")
+        
+        # Calcular altura total del canvas dinámicamente
+        num_photos = len(photo_paths)
+        total_photos_height = (BASE_PHOTO_HEIGHT * num_photos) + (PHOTO_SPACING * (num_photos - 1))
+        design_section_height = DESIGN_HEIGHT + PHOTO_SPACING if design_path and design_path.exists() else 0
+        strip_height = TOP_MARGIN + total_photos_height + design_section_height + BOTTOM_MARGIN
+        
+        # Crear canvas con color de fondo personalizado
+        strip = Image.new('RGB', (STRIP_WIDTH, strip_height), BACKGROUND_COLOR)
         
         try:
             # Y offset inicial
-            y_offset = 30
+            y_offset = TOP_MARGIN
             
-            # 1. Procesar y agregar las 3 fotos UNA POR UNA
+            # 1. Procesar y agregar las fotos UNA POR UNA
             for i, photo_path in enumerate(photo_paths):
                 # Cargar foto
                 photo = Image.open(photo_path)
@@ -50,8 +121,8 @@ class ImageService:
                 # Procesar foto
                 photo_processed = ImageService._process_photo(
                     photo, 
-                    width - 50, 
-                    photo_height
+                    STRIP_WIDTH - 50,  # Ancho con margen lateral
+                    BASE_PHOTO_HEIGHT
                 )
                 
                 # Liberar foto original
@@ -59,7 +130,7 @@ class ImageService:
                 del photo
                 
                 # Calcular posición centrada
-                x_pos = (width - photo_processed.width) // 2
+                x_pos = (STRIP_WIDTH - photo_processed.width) // 2
                 
                 # Pegar en strip
                 strip.paste(photo_processed, (x_pos, y_offset))
@@ -72,21 +143,21 @@ class ImageService:
                 gc.collect()
                 
                 # Siguiente posición
-                y_offset += photo_height + spacing
+                y_offset += BASE_PHOTO_HEIGHT + PHOTO_SPACING
             
             # 2. Agregar diseño si existe
             if design_path and design_path.exists():
                 design = Image.open(design_path)
                 
                 # Redimensionar si es necesario
-                if design.size != (width, design_height):
+                if design.size != (STRIP_WIDTH, DESIGN_HEIGHT):
                     design = design.resize(
-                        (width, design_height),
+                        (STRIP_WIDTH, DESIGN_HEIGHT),
                         Image.Resampling.LANCZOS
                     )
                 
-                # Posición del diseño (al final)
-                design_y = height - design_height
+                # Posición del diseño (al final después de todas las fotos)
+                design_y = y_offset
                 
                 # Si tiene transparencia, componer correctamente
                 if design.mode == 'RGBA':
@@ -172,28 +243,35 @@ class ImageService:
     @staticmethod
     def create_duplicate_strip(strip_path: Path) -> Path:
         """
-        Crea imagen 4x6" con 2 tiras idénticas lado a lado.
+        Crea imagen con 2 tiras idénticas lado a lado.
+        Se ajusta dinámicamente a la altura del strip original.
         """
         strip = Image.open(strip_path)
         
         try:
-            # Dimensiones 4x6"
-            full_width = 1200
-            full_height = 1800
+            # Dimensiones dinámicas basadas en el strip original
+            STRIP_WIDTH = strip.width
+            STRIP_HEIGHT = strip.height
+            FULL_PAGE_WIDTH = STRIP_WIDTH * 2  # Dos tiras lado a lado
+            FULL_PAGE_HEIGHT = STRIP_HEIGHT
+            CUT_LINE_COLOR = (200, 200, 200)
+            CUT_LINE_DASH_LENGTH = 10
+            CUT_LINE_GAP = 20
             
-            # Crear canvas
-            full_page = Image.new('RGB', (full_width, full_height), 'white')
+            # Crear canvas con altura dinámica
+            full_page = Image.new('RGB', (FULL_PAGE_WIDTH, FULL_PAGE_HEIGHT), 'white')
             
             # Pegar ambas copias
             full_page.paste(strip, (0, 0))
-            full_page.paste(strip, (600, 0))
+            full_page.paste(strip, (STRIP_WIDTH, 0))
             
-            # Agregar línea de corte sutil
+            # Agregar línea de corte sutil en el centro
             draw = ImageDraw.Draw(full_page)
-            for y in range(0, full_height, 20):
+            center_x = STRIP_WIDTH - 2  # Línea ligeramente a la izquierda del centro
+            for y in range(0, FULL_PAGE_HEIGHT, CUT_LINE_GAP):
                 draw.line(
-                    [(598, y), (598, y + 10)],
-                    fill=(200, 200, 200),
+                    [(center_x, y), (center_x, y + CUT_LINE_DASH_LENGTH)],
+                    fill=CUT_LINE_COLOR,
                     width=1
                 )
             

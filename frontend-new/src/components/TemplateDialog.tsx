@@ -449,14 +449,20 @@ export default function TemplateDialog({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !isSubmitting && fileInputRef.current?.click()}
               className={`
                 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
-                transition-colors
-                ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary'}
+                transition-all duration-200
+                ${isDragging ? 'border-primary bg-primary/10 scale-105' : 'border-muted-foreground/25 hover:border-primary'}
+                ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
               `}
             >
-              {previewUrl ? (
+              {isSubmitting ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <p className="text-sm text-muted-foreground">Subiendo diseño...</p>
+                </div>
+              ) : previewUrl ? (
                 <div className="relative">
                   <img
                     src={previewUrl}

@@ -1,17 +1,19 @@
 {
-  "photos_to_take": 4,
+  "version": "1.0",
+  "photos_to_take": 3,
   "countdown_seconds": 5,
-  "backend_url": null,
+  "backend_url": "http://127.0.0.1:8000",
   "default_printer": null,
-  "active_design_id": "design_20251109_121201",
+  "active_design_id": null,
+  "active_template_id": "template_20251109_234549",
   "audio_enabled": true,
   "voice_rate": 1.0,
   "voice_pitch": 1.0,
   "voice_volume": 1.0,
   "auto_reset_seconds": 30,
-  "strip_layout": null,
-  "print_mode": null,
-  "photo_spacing": null,
-  "strip_width": null,
-  "strip_height": null
+  "strip_layout": "vertical-3",
+  "print_mode": "dual-strip",
+  "photo_spacing": 20,
+  "strip_width": 600,
+  "strip_height": 1800
 }

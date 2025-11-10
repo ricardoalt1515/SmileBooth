@@ -1,0 +1,138 @@
+# ============================================
+# PHOTOBOOTH - Git Ignore Configuration
+# ============================================
+
+# ==========================================
+# 📸 FOTOS Y ARCHIVOS GENERADOS (NO SUBIR)
+# ==========================================
+# Carpetas donde se guardan las fotos capturadas
+data/photos/*
+!data/photos/.gitkeep
+data/strips/*
+!data/strips/.gitkeep
+data/temp/*
+!data/temp/.gitkeep
+
+# Diseños subidos por usuarios (opcional: comentar si quieres versionar algunos)
+data/designs/template_assets/*
+!data/designs/template_assets/.gitkeep
+data/designs/custom/*
+!data/designs/custom/.gitkeep
+
+# Archivos de sesión y temporales
+*.jpg
+*.jpeg
+*.png
+!**/static/**/*.png
+!**/static/**/*.jpg
+!**/assets/**/*.png
+!**/assets/**/*.jpg
+
+# ==========================================
+# 🐍 PYTHON / BACKEND
+# ==========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ==========================================
+# ⚛️  REACT / FRONTEND
+# ==========================================
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Production builds
+build/
+dist/
+.next/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# ==========================================
+# 💾 BASES DE DATOS Y CONFIGURACIÓN
+# ==========================================
+# SQLite databases (si usas)
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuración local (mantener templates)
+# NOTA: settings.json y templates.json SÍ se versionan para tener estructura base
+# pero puedes excluirlos si tienen datos sensibles:
+# data/config/settings.json
+# data/designs/templates.json
+
+# ==========================================
+# 🖥️  SISTEMA OPERATIVO
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ==========================================
+# 📦 OTROS
+# ==========================================
+# Backups
+*.bak
+*.backup
+*.old
+*.orig
+
+# Compressed files
+*.zip
+*.tar.gz
+*.rar
+
+# Archived/deprecated code
+_archived/
+_old/
+_deprecated/

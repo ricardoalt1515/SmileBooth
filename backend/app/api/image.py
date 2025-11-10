@@ -47,11 +47,15 @@ async def compose_strip(request: ComposeStripRequest):
                     detail=f"Foto no encontrada: {photo_path}"
                 )
         
-        # Componer tira
+        # Componer tira con metadatos del template
         strip_path = ImageService.compose_strip(
             photo_paths=photo_paths,
             design_path=design_path,
-            session_id=request.session_id
+            session_id=request.session_id,
+            layout=request.layout,
+            design_position=request.design_position,
+            background_color=request.background_color,
+            photo_spacing=request.photo_spacing
         )
         
         # Crear versión duplicada (4x6" con 2 tiras)
@@ -121,11 +125,15 @@ async def preview_strip(request: ComposeStripRequest):
         preview_filename = f"preview_{int(time.time())}.jpg"
         preview_path = TEMP_DIR / preview_filename
         
-        # Componer strip (sin crear duplicate)
+        # Componer strip (sin crear duplicate) con metadatos del template
         strip_path = ImageService.compose_strip(
             photo_paths=photo_paths,
             design_path=design_path,
-            session_id="preview"  # Carpeta temporal
+            session_id="preview",  # Carpeta temporal
+            layout=request.layout,
+            design_position=request.design_position,
+            background_color=request.background_color,
+            photo_spacing=request.photo_spacing
         )
         
         # Mover a temp

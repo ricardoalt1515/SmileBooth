@@ -25,24 +25,38 @@ export default function ProcessingScreen() {
       try {
         setIsLoading(true);
 
-        // ✅ OBTENER DISEÑO DEL TEMPLATE ACTIVO
+        // ✅ OBTENER TEMPLATE ACTIVO COMPLETO
         let designPath: string | null = null;
+        let activeTemplate = null;
         try {
-          const activeTemplate = await photoboothAPI.templates.getActive();
-          if (activeTemplate?.design_file_path) {
-            designPath = activeTemplate.design_file_path;
-            console.log('✅ Usando diseño del template:', designPath);
+          activeTemplate = await photoboothAPI.templates.getActive();
+          if (activeTemplate) {
+            designPath = activeTemplate.design_file_path || null;
+            console.log('✅ Template activo:', {
+              name: activeTemplate.name,
+              layout: activeTemplate.layout,
+              design_position: activeTemplate.design_position,
+              background_color: activeTemplate.background_color,
+              photo_spacing: activeTemplate.photo_spacing,
+              design_path: designPath
+            });
           }
         } catch (error) {
-          console.warn('⚠️  No hay template activo con diseño, continuando sin diseño');
+          console.warn('⚠️  No hay template activo, usando configuración por defecto');
         }
 
         // ✅ COMPONER STRIP CON BACKEND
         // Backend crea: strip_path (600x1800) y full_page_path (1200x1800 con 2 tiras)
+        // Pasar metadatos completos del template para personalización
         const stripResponse = await photoboothAPI.image.composeStrip({
-          photo_paths: photoPaths, // Rutas del backend
+          photo_paths: photoPaths,
           design_path: designPath,
           session_id: sessionId || undefined,
+          // Metadatos del template (opcionales, backend usa defaults si no se proveen)
+          layout: activeTemplate?.layout,
+          design_position: activeTemplate?.design_position,
+          background_color: activeTemplate?.background_color,
+          photo_spacing: activeTemplate?.photo_spacing,
         });
 
         console.log('✅ Strip creado:', stripResponse);

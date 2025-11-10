@@ -9,10 +9,15 @@ import OperationalHUD from '../components/OperationalHUD';
 import { useDeviceStatus } from '../hooks/useDeviceStatus';
 import CircularCountdown from '../components/CircularCountdown';
 import StaffDock from '../components/StaffDock';
+import HardwareChecklistDialog from '../components/HardwareChecklistDialog';
 import { EventPreset, EVENT_TYPE_LABELS } from '../types/preset';
+import { LAYOUT_LABELS, getLayoutPhotoCount, LAYOUT_3X1_VERTICAL } from '../types/template';
 import { Calendar } from 'lucide-react';
 
 type BoothState = 'idle' | 'countdown' | 'capturing' | 'pausing' | 'reviewing' | 'preview-final' | 'processing' | 'success';
+
+const getTemplateLayoutLabel = (layout?: string | null) =>
+  layout ? LAYOUT_LABELS[layout as keyof typeof LAYOUT_LABELS] ?? null : null;
 
 export default function UnifiedBoothScreen() {
   const {
@@ -46,11 +51,18 @@ export default function UnifiedBoothScreen() {
   const [previewCountdown, setPreviewCountdown] = useState(5);
   const [galleryPhotoCount, setGalleryPhotoCount] = useState(0);
   const [activeEvent, setActiveEvent] = useState<EventPreset | null>(null);
+  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
   const { speak } = useAudio();
   const { playShutter, playBeep, playSuccess } = useSoundEffects();
   const toast = useToastContext();
   const deviceStatus = useDeviceStatus();
+  const activeTemplateLabel = getTemplateLayoutLabel(activeEvent?.template_layout);
+  
+  // Calcular número de fotos efectivo: priorizar template activo, fallback a settings
+  const effectivePhotosToTake = activeEvent?.template_layout 
+    ? getLayoutPhotoCount(activeEvent.template_layout as any) 
+    : photosToTake || getLayoutPhotoCount(LAYOUT_3X1_VERTICAL); // Fallback seguro
 
   // Helper: Wait for image to be ready with retry logic
   const waitForImageReady = async (url: string): Promise<void> => {
@@ -112,7 +124,7 @@ export default function UnifiedBoothScreen() {
       incrementPhotoIndex();
 
       // Si es la última foto, ir a REVIEW (carousel)
-      if (currentPhotoIndex === photosToTake - 1) {
+      if (currentPhotoIndex === effectivePhotosToTake - 1) {
         playSuccess();
         speak('¡Perfecto! Mira tus fotos.', { rate: 1.0, pitch: 1.1 });
         setTimeout(() => {
@@ -136,7 +148,7 @@ export default function UnifiedBoothScreen() {
     } finally {
       setIsCapturingPhoto(false);
     }
-  }, [currentPhotoIndex, photosToTake, sessionId, addCapturedImage, addPhotoPath, setSessionId, incrementPhotoIndex, setCurrentScreen, setError, playShutter, playSuccess, speak]);
+  }, [currentPhotoIndex, effectivePhotosToTake, sessionId, addCapturedImage, addPhotoPath, setSessionId, incrementPhotoIndex, setCurrentScreen, setError, playShutter, playSuccess, speak]);
 
   // Countdown principal (5-4-3-2-1)
   useEffect(() => {
@@ -222,7 +234,7 @@ export default function UnifiedBoothScreen() {
       }
       // Navegación en carousel
       if (boothState === 'reviewing') {
-        if (e.code === 'ArrowRight' && reviewIndex < photosToTake - 1) {
+        if (e.code === 'ArrowRight' && reviewIndex < effectivePhotosToTake - 1) {
           e.preventDefault();
           setReviewIndex(reviewIndex + 1);
           setReviewProgress(0);
@@ -237,14 +249,14 @@ export default function UnifiedBoothScreen() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [boothState, reviewIndex, photosToTake]);
+  }, [boothState, reviewIndex, effectivePhotosToTake]);
 
   // Carousel auto-advance
   useEffect(() => {
     if (boothState !== 'reviewing') return;
 
     // Duración por foto: 2.5s (primeras 2), 3s (última)
-    const duration = reviewIndex === photosToTake - 1 ? 3000 : 2500;
+    const duration = reviewIndex === effectivePhotosToTake - 1 ? 3000 : 2500;
     
     // Progress bar animation
     const progressInterval = setInterval(() => {
@@ -256,7 +268,7 @@ export default function UnifiedBoothScreen() {
 
     // Auto-advance o ir a preview final
     const advanceTimer = setTimeout(() => {
-      if (reviewIndex < photosToTake - 1) {
+      if (reviewIndex < effectivePhotosToTake - 1) {
         // Siguiente foto
         playBeep();
         setReviewIndex(reviewIndex + 1);
@@ -273,7 +285,7 @@ export default function UnifiedBoothScreen() {
       clearInterval(progressInterval);
       clearTimeout(advanceTimer);
     };
-  }, [boothState, reviewIndex, photosToTake, playBeep, speak, setCurrentScreen]);
+  }, [boothState, reviewIndex, effectivePhotosToTake, playBeep, speak, setCurrentScreen]);
 
   // Generar preview del strip
   const generateStripPreview = async () => {
@@ -281,23 +293,33 @@ export default function UnifiedBoothScreen() {
       console.log('🎬 Generando preview del strip...');
       console.log('📸 Photo paths:', photoPaths);
       
-      // Obtener diseño del template activo
+      // Obtener template activo completo (DRY: reutilizar misma lógica que ProcessingScreen)
       let designPath: string | null = null;
+      let activeTemplate = null;
       try {
-        const activeTemplate = await photoboothAPI.templates.getActive();
-        if (activeTemplate?.design_file_path) {
-          designPath = activeTemplate.design_file_path;
-          console.log('🎨 Diseño del template:', designPath);
+        activeTemplate = await photoboothAPI.templates.getActive();
+        if (activeTemplate) {
+          designPath = activeTemplate.design_file_path || null;
+          console.log('✅ Template activo:', {
+            name: activeTemplate.name,
+            background_color: activeTemplate.background_color,
+            photo_spacing: activeTemplate.photo_spacing
+          });
         }
       } catch (err) {
-        console.warn('⚠️ No hay template activo con diseño');
+        console.warn('⚠️ No hay template activo, usando configuración por defecto');
       }
 
-      // Generar preview
+      // Generar preview con metadatos completos del template
       console.log('🚀 Llamando API preview-strip...');
       const previewUrl = await photoboothAPI.image.previewStrip({
         photo_paths: photoPaths,
         design_path: designPath,
+        // Metadatos del template (opcionales, backend usa defaults)
+        layout: activeTemplate?.layout,
+        design_position: activeTemplate?.design_position,
+        background_color: activeTemplate?.background_color,
+        photo_spacing: activeTemplate?.photo_spacing,
       });
 
       console.log('✅ Preview generado:', previewUrl);
@@ -386,9 +408,7 @@ export default function UnifiedBoothScreen() {
   };
 
   const handleOpenChecklist = () => {
-    // TODO: Abrir dialog de checklist
-    console.log('Opening hardware checklist...');
-    toast.info('Hardware Checklist - Próximamente');
+    setIsChecklistOpen(true);
   };
 
   return (
@@ -430,6 +450,12 @@ export default function UnifiedBoothScreen() {
                   })}
                 </div>
               )}
+              {activeEvent.template_name && (
+                <div className="text-[11px] text-white/80">
+                  Template: {activeEvent.template_name}
+                  {activeTemplateLabel ? ` • ${activeTemplateLabel}` : ''}
+                </div>
+              )}
             </div>
             <div className="flex-shrink-0 text-lg">
               {EVENT_TYPE_LABELS[activeEvent.event_type].split(' ')[0]}
@@ -440,7 +466,7 @@ export default function UnifiedBoothScreen() {
 
       {/* SIDEBAR IZQUIERDA: 3 Photo Slots */}
       <aside className="w-[25%] min-w-[320px] max-w-[480px] flex flex-col items-center justify-center gap-8 p-8 bg-gradient-to-b from-black via-[#0a0a0a] to-black border-r-2 border-[#2a2a2a]">
-        {[...Array(photosToTake)].map((_, i) => (
+        {[...Array(effectivePhotosToTake)].map((_, i) => (
           <div
             key={i}
             className={`w-full aspect-[3/4] rounded-xl overflow-hidden transition-all duration-500 ${
@@ -582,7 +608,7 @@ export default function UnifiedBoothScreen() {
               className="mb-8"
             />
             <p className="text-white text-3xl font-bold">¡Prepárate!</p>
-            <p className="text-white/70 text-xl mt-2">Foto {currentPhotoIndex + 1} de {photosToTake}</p>
+            <p className="text-white/70 text-xl mt-2">Foto {currentPhotoIndex + 1} de {effectivePhotosToTake}</p>
           </div>
         )}
 
@@ -611,7 +637,7 @@ export default function UnifiedBoothScreen() {
             {/* Contador discreto */}
             <div className="absolute top-6 right-6 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2">
               <span className="text-white text-lg font-medium">
-                {reviewIndex + 1} / {photosToTake}
+                {reviewIndex + 1} / {effectivePhotosToTake}
               </span>
             </div>
 
@@ -818,6 +844,21 @@ export default function UnifiedBoothScreen() {
           galleryPhotoCount={galleryPhotoCount}
         />
       </main>
+
+      <HardwareChecklistDialog
+        open={isChecklistOpen}
+        onOpenChange={setIsChecklistOpen}
+        status={{
+          cameraStatus: deviceStatus.cameraStatus,
+          printerStatus: deviceStatus.printerStatus,
+          backendStatus: deviceStatus.backendStatus,
+          cameraDetails: deviceStatus.cameraDetails,
+          printerDetails: deviceStatus.printerDetails,
+          backendDetails: deviceStatus.backendDetails,
+        }}
+        onRefresh={deviceStatus.refresh}
+        activeEvent={activeEvent}
+      />
 
       {/* Error Toast */}
       {errorMessage && (

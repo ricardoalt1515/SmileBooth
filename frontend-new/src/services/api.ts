@@ -70,21 +70,39 @@ export const photoboothAPI = {
       photo_paths: string[];
       design_path?: string | null;
       session_id?: string;
+      // Template metadata (optional)
+      layout?: string | null;
+      design_position?: string | null;
+      background_color?: string | null;
+      photo_spacing?: number | null;
     }) => {
       const response = await apiClient.post('/api/image/compose-strip', {
         photo_paths: params.photo_paths,
         design_path: params.design_path || null,
         session_id: params.session_id,
+        layout: params.layout,
+        design_position: params.design_position,
+        background_color: params.background_color,
+        photo_spacing: params.photo_spacing,
       });
       return response.data; // { success, strip_path, full_page_path }
     },
     previewStrip: async (params: {
       photo_paths: string[];
       design_path?: string | null;
+      // Template metadata (optional)
+      layout?: string | null;
+      design_position?: string | null;
+      background_color?: string | null;
+      photo_spacing?: number | null;
     }) => {
       const response = await apiClient.post('/api/image/preview-strip', {
         photo_paths: params.photo_paths,
         design_path: params.design_path || null,
+        layout: params.layout,
+        design_position: params.design_position,
+        background_color: params.background_color,
+        photo_spacing: params.photo_spacing,
       }, {
         responseType: 'blob', // Recibir imagen como blob
       });
@@ -194,6 +212,7 @@ export const photoboothAPI = {
       voice_rate?: number;
       voice_pitch?: number;
       voice_volume?: number;
+      template_id?: string;
       design_id?: string;
       notes?: string;
       client_name?: string;
@@ -213,6 +232,7 @@ export const photoboothAPI = {
       voice_rate?: number;
       voice_pitch?: number;
       voice_volume?: number;
+      template_id?: string;
       design_id?: string;
       notes?: string;
       client_name?: string;

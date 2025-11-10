@@ -14,6 +14,7 @@ class Settings(BaseModel):
     backend_url: Optional[str] = Field(default="http://127.0.0.1:8000", description="Backend API URL")
     default_printer: Optional[str] = Field(default=None, description="Default printer name")
     active_design_id: Optional[str] = Field(default=None, description="Active Canva design ID")
+    active_template_id: Optional[str] = Field(default=None, description="Active template ID")
     audio_enabled: bool = Field(default=True, description="Enable audio feedback")
     voice_rate: float = Field(default=1.0, ge=0.5, le=2.0, description="TTS voice rate")
     voice_pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="TTS voice pitch")
@@ -49,6 +50,7 @@ class SettingsUpdate(BaseModel):
     backend_url: Optional[str] = None
     default_printer: Optional[str] = None
     active_design_id: Optional[str] = None
+    active_template_id: Optional[str] = None
     audio_enabled: Optional[bool] = None
     voice_rate: Optional[float] = Field(default=None, ge=0.5, le=2.0)
     voice_pitch: Optional[float] = Field(default=None, ge=0.5, le=2.0)
