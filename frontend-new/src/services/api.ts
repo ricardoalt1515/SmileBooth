@@ -189,6 +189,58 @@ export const photoboothAPI = {
       const response = await apiClient.delete('/api/gallery/clear-all');
       return response.data; // { success, message, deleted_count }
     },
+    deletePhoto: async (sessionId: string, filename: string) => {
+      const response = await apiClient.delete(`/api/gallery/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(filename)}`);
+      return response.data as { success: boolean; message: string };
+    },
+  },
+
+  // Sessions endpoints
+  sessions: {
+    list: async (params: {
+      preset_id?: string;
+      status?: string;
+      limit?: number;
+    } = {}) => {
+      const response = await apiClient.get('/api/sessions', {
+        params,
+      });
+      return response.data; // { sessions, total }
+    },
+
+    get: async (sessionId: string) => {
+      const response = await apiClient.get(`/api/sessions/${sessionId}`);
+      return response.data; // SessionRecord
+    },
+
+    reprint: async (sessionId: string, payload: {
+      printer_name?: string | null;
+      copies?: number;
+      file_path?: string | null;
+    } = {}) => {
+      const response = await apiClient.post(`/api/sessions/${sessionId}/reprint`, {
+        printer_name: payload.printer_name ?? null,
+        copies: payload.copies ?? 2,
+        file_path: payload.file_path ?? null,
+      });
+      return response.data; // Updated SessionRecord
+    },
+
+    export: async (payload: {
+      preset_id?: string | null;
+      session_ids?: string[] | null;
+    } = {}) => {
+      const response = await apiClient.post('/api/sessions/export', {
+        preset_id: payload.preset_id ?? null,
+        session_ids: payload.session_ids ?? null,
+      });
+      return response.data as {
+        success: boolean;
+        file: string;
+        url: string;
+        filename: string;
+      };
+    },
   },
 
   // Presets/Events endpoints

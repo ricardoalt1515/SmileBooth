@@ -30,13 +30,13 @@ export default function OperationalHUD({
   const getStatusColor = (status: DeviceStatus) => {
     switch (status) {
       case 'ok':
-        return 'bg-green-500/20 text-green-400 border-green-500/50';
+        return 'glass border-green-400/30 text-green-400 shadow-lg shadow-green-400/20 hover:border-green-400/50 hover:shadow-green-400/30';
       case 'error':
-        return 'bg-red-500/20 text-red-400 border-red-500/50';
+        return 'glass border-red-400/30 text-red-400 shadow-lg shadow-red-400/20 hover:border-red-400/50 hover:shadow-red-400/30';
       case 'reconnecting':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
+        return 'glass border-yellow-400/30 text-yellow-400 shadow-lg shadow-yellow-400/20 hover:border-yellow-400/50 hover:shadow-yellow-400/30';
       default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
+        return 'glass border-white/20 text-white/60 shadow-lg hover:border-white/30';
     }
   };
 

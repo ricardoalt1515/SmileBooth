@@ -13,6 +13,7 @@ import HardwareChecklistDialog from '../components/HardwareChecklistDialog';
 import { EventPreset, EVENT_TYPE_LABELS } from '../types/preset';
 import { LAYOUT_LABELS, getLayoutPhotoCount, LAYOUT_3X1_VERTICAL } from '../types/template';
 import { Calendar } from 'lucide-react';
+import Confetti from '../components/Confetti';
 
 type BoothState = 'idle' | 'countdown' | 'capturing' | 'pausing' | 'reviewing' | 'preview-final' | 'processing' | 'success';
 
@@ -427,57 +428,89 @@ export default function UnifiedBoothScreen() {
         }}
       />
 
-      {/* Event Indicator - Evento activo */}
+      {/* Event Indicator - Enhanced with glassmorphism */}
       {activeEvent && (
-        <div className="fixed top-20 left-4 z-40 bg-gradient-to-r from-[#ff0080]/90 to-[#ff0080]/70 backdrop-blur-sm rounded-lg shadow-lg border border-[#ff0080]/50 px-4 py-2 max-w-xs">
-          <div className="flex items-center gap-2">
-            <div className="flex-shrink-0">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-white/80 font-medium uppercase tracking-wide">
-                Evento Activo
+        <div className="fixed top-20 left-4 z-40 glass rounded-xl max-w-xs animate-slide-in-blur">
+          {/* Gradient accent border */}
+          <div
+            className="absolute inset-0 rounded-xl opacity-50"
+            style={{
+              background: 'var(--gradient-primary)',
+              zIndex: -1,
+              filter: 'blur(8px)',
+            }}
+          />
+
+          <div className="relative px-4 py-3 border border-white/10 rounded-xl backdrop-blur-xl bg-black/40">
+            <div className="flex items-center gap-3">
+              {/* Pulsing indicator */}
+              <div className="flex-shrink-0 relative">
+                <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
+                <div className="absolute inset-0 w-3 h-3 bg-primary rounded-full animate-ping opacity-75" />
               </div>
-              <div className="text-sm text-white font-bold truncate">
-                {activeEvent.name}
+
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider mb-0.5">
+                  Evento Activo
+                </div>
+                <div className="text-base text-white font-bold truncate">
+                  {activeEvent.name}
+                </div>
+                {activeEvent.event_date && (
+                  <div className="flex items-center gap-1.5 text-xs text-white/70 mt-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(activeEvent.event_date).toLocaleDateString('es-MX', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </div>
+                )}
+                {activeEvent.template_name && (
+                  <div className="text-[11px] text-white/60 mt-1">
+                    {activeEvent.template_name}
+                    {activeTemplateLabel ? ` • ${activeTemplateLabel}` : ''}
+                  </div>
+                )}
               </div>
-              {activeEvent.event_date && (
-                <div className="flex items-center gap-1 text-xs text-white/70 mt-0.5">
-                  <Calendar className="w-3 h-3" />
-                  {new Date(activeEvent.event_date).toLocaleDateString('es-MX', {
-                    day: 'numeric',
-                    month: 'short'
-                  })}
-                </div>
-              )}
-              {activeEvent.template_name && (
-                <div className="text-[11px] text-white/80">
-                  Template: {activeEvent.template_name}
-                  {activeTemplateLabel ? ` • ${activeTemplateLabel}` : ''}
-                </div>
-              )}
-            </div>
-            <div className="flex-shrink-0 text-lg">
-              {EVENT_TYPE_LABELS[activeEvent.event_type].split(' ')[0]}
+
+              {/* Event type emoji */}
+              <div className="flex-shrink-0 text-2xl opacity-80">
+                {EVENT_TYPE_LABELS[activeEvent.event_type].split(' ')[0]}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* SIDEBAR IZQUIERDA: 3 Photo Slots */}
-      <aside className="w-[25%] min-w-[320px] max-w-[480px] flex flex-col items-center justify-center gap-8 p-8 bg-gradient-to-b from-black via-[#0a0a0a] to-black border-r-2 border-[#2a2a2a]">
+      {/* SIDEBAR IZQUIERDA: 3 Photo Slots - Enhanced with glassmorphism */}
+      <aside className="w-[25%] min-w-[320px] max-w-[480px] flex flex-col items-center justify-center gap-8 p-8 relative overflow-hidden border-r border-white/5">
+        {/* Animated gradient mesh background */}
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            background: 'var(--gradient-mesh)',
+          }}
+        />
+        {/* Dark overlay for glassmorphism */}
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-none" />
         {[...Array(effectivePhotosToTake)].map((_, i) => (
           <div
             key={i}
-            className={`w-full aspect-[3/4] rounded-xl overflow-hidden transition-all duration-500 ${
-              i < photoSlots.length
-                ? 'border-3 border-[#ff0080] shadow-lg shadow-[#ff0080]/50'
+            className={`
+              w-full aspect-[3/4] rounded-xl overflow-hidden
+              transition-all duration-500 relative z-10
+              ${i < photoSlots.length
+                ? 'border-[3px] shadow-2xl'
                 : i === currentPhotoIndex && boothState !== 'idle' && boothState !== 'success' && boothState !== 'reviewing'
-                  ? 'border-3 border-[#ff0080] animate-pulse'
-                  : 'border-2 border-[#2a2a2a]'
-            }`}
+                  ? 'border-[3px] border-primary animate-breathe'
+                  : 'border-2 border-white/10 shadow-md'
+              }
+            `}
             style={{
-              animation: i < photoSlots.length ? 'photoShoot 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards' : undefined
+              animation: i < photoSlots.length ? 'photoShoot 2.0s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' : undefined,
+              borderColor: i < photoSlots.length ? 'var(--primary)' : undefined,
+              boxShadow: i < photoSlots.length ? 'var(--shadow-glow-magenta)' : undefined,
             }}
           >
             {photoSlots[i] ? (
@@ -582,17 +615,56 @@ export default function UnifiedBoothScreen() {
           )}
         </div>
 
-        {/* OVERLAY: IDLE */}
+        {/* OVERLAY: IDLE - Enhanced with modern design */}
         {boothState === 'idle' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+            {/* Animated instruction text */}
+            <p className="text-2xl text-white/80 mb-8 animate-fade-in-up font-medium tracking-wide">
+              Presiona el botón cuando estés listo
+            </p>
+
+            {/* Enhanced gradient button */}
             <button
               onClick={handleStart}
-              className="px-20 py-8 bg-[#ff0080] rounded-full text-white text-4xl font-bold hover:bg-[#ff0080]/90 transition-all duration-300 hover:scale-105"
-              style={{ minHeight: '80px' }}
+              className="
+                relative px-20 py-8 rounded-full text-white text-4xl font-bold
+                transition-all duration-300 hover:scale-105 active:scale-95
+                overflow-hidden group
+              "
+              style={{
+                minHeight: '80px',
+                background: 'var(--gradient-primary)',
+                boxShadow: 'var(--shadow-glow-magenta), var(--shadow-xl)',
+              }}
               aria-label="Comenzar sesión de fotos"
             >
-              TOCA PARA COMENZAR
+              {/* Shimmer effect on hover */}
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s infinite',
+                }}
+              />
+              <span className="relative z-10 drop-shadow-lg">TOCA PARA COMENZAR</span>
             </button>
+
+            {/* Floating particles */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-2 rounded-full bg-primary animate-float"
+                  style={{
+                    left: `${20 + i * 15}%`,
+                    bottom: '20%',
+                    animationDelay: `${i * 0.5}s`,
+                    animationDuration: `${3 + i * 0.5}s`,
+                  }}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -757,22 +829,38 @@ export default function UnifiedBoothScreen() {
           </div>
         )}
 
-        {/* OVERLAY: SUCCESS */}
+        {/* OVERLAY: SUCCESS - Enhanced with premium animations */}
         {boothState === 'success' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
-            {/* Preview de las 3 fotos - MÁS GRANDE */}
-            <div className="flex gap-6 mb-8" style={{ animation: 'slideInUp 0.5s ease-out' }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
+            {/* Confetti celebration! */}
+            <Confetti active={true} count={60} duration={4000} />
+
+            {/* Gradient mesh background */}
+            <div
+              className="absolute inset-0 opacity-20 pointer-events-none"
+              style={{ background: 'var(--gradient-mesh)' }}
+            />
+
+            {/* Preview de las fotos - Enhanced with stagger effect */}
+            <div className="flex gap-6 mb-8 relative z-10">
               {photoSlots.map((photo, i) => (
-                <div 
+                <div
                   key={i}
-                  className="w-48 h-36 rounded-xl overflow-hidden border-4 border-[#ff0080] shadow-2xl shadow-[#ff0080]/40 hover:scale-105 transition-transform duration-300 cursor-pointer"
-                  style={{ 
-                    animation: `slideInUp 0.5s ease-out ${i * 0.15}s backwards`
+                  className={`
+                    w-48 h-36 rounded-xl overflow-hidden
+                    border-[3px] shadow-2xl
+                    hover:scale-110 hover:-rotate-2 hover:z-20
+                    transition-all duration-300 cursor-pointer
+                    stagger-${i + 1} animate-scale-in
+                  `}
+                  style={{
+                    borderColor: 'var(--primary)',
+                    boxShadow: 'var(--shadow-glow-magenta)',
                   }}
                   onClick={() => console.log('Click en foto', i + 1)}
                 >
-                  <img 
-                    src={photo} 
+                  <img
+                    src={photo}
                     alt={`Foto ${i + 1}`}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -784,26 +872,52 @@ export default function UnifiedBoothScreen() {
               ))}
             </div>
 
-            <div className="text-7xl mb-6 animate-bounce">✨</div>
-            <h2 className="text-white text-6xl font-bold mb-4">¡Perfecto!</h2>
-            <p className="text-white/70 text-xl mb-12">Tus 3 fotos están listas</p>
-            
-            <div className="flex gap-6">
+            {/* Success message with gradient text */}
+            <div className="text-7xl mb-6 animate-bounce-smooth">✨</div>
+            <h2 className="text-white text-6xl font-bold mb-4 gradient-text">
+              ¡Perfecto!
+            </h2>
+            <p className="text-white/70 text-xl mb-12 animate-fade-in-up">
+              Tus {effectivePhotosToTake} fotos están listas
+            </p>
+
+            {/* Enhanced action buttons */}
+            <div className="flex gap-6 relative z-10">
               <button
                 onClick={() => {
                   speak('Enviando a impresora.', { rate: 1.0, pitch: 1.0 });
                   setCurrentScreen('processing');
                 }}
-                className="px-16 py-6 bg-[#ff0080] rounded-full text-white text-2xl font-bold hover:bg-[#ff0080]/90 hover:scale-105 transition-all duration-300 shadow-lg shadow-[#ff0080]/50"
-                style={{ minHeight: '80px' }}
+                className="
+                  relative px-16 py-6 rounded-full text-white text-2xl font-bold
+                  hover:scale-105 active:scale-95 transition-all duration-300
+                  overflow-hidden group
+                "
+                style={{
+                  minHeight: '80px',
+                  background: 'var(--gradient-primary)',
+                  boxShadow: 'var(--shadow-glow-magenta), var(--shadow-xl)',
+                }}
                 aria-label="Imprimir fotos"
               >
-                IMPRIMIR
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 2s infinite',
+                  }}
+                />
+                <span className="relative z-10">IMPRIMIR</span>
               </button>
-              
+
               <button
                 onClick={handleReset}
-                className="px-16 py-6 bg-transparent border-2 border-white rounded-full text-white text-2xl font-bold hover:bg-white/10 hover:scale-105 transition-all duration-300"
+                className="
+                  px-16 py-6 glass rounded-full text-white text-2xl font-bold
+                  hover:scale-105 active:scale-95 transition-all duration-300
+                  border-2 border-white/20
+                "
                 style={{ minHeight: '80px' }}
                 aria-label="Nueva sesión"
               >
@@ -811,7 +925,7 @@ export default function UnifiedBoothScreen() {
               </button>
             </div>
 
-            <p className="text-white/50 text-lg mt-8">
+            <p className="text-white/50 text-lg mt-8 animate-pulse">
               Auto-reset en {autoResetTimer}s
             </p>
           </div>
@@ -892,27 +1006,36 @@ export default function UnifiedBoothScreen() {
         @keyframes photoShoot {
           0% {
             opacity: 0;
-            transform: scale(0.5) translateY(60px);
-            filter: brightness(3) contrast(0.8) saturate(0.3);
+            transform: scale(0.85) translateY(-80px) translateX(0);
+            filter: brightness(2.5) contrast(1.1) saturate(0.4) sepia(1);
           }
-          40% {
-            opacity: 0.9;
-            transform: scale(0.92) translateY(10px);
-            filter: brightness(2) contrast(0.9) saturate(0.6);
+          25% {
+            opacity: 0.7;
+            transform: scale(0.92) translateY(-20px) translateX(2px);
+            filter: brightness(1.8) contrast(1.05) saturate(0.6) sepia(0.7);
+          }
+          50% {
+            opacity: 0.95;
+            transform: scale(0.98) translateY(5px) translateX(-3px);
+            filter: brightness(1.4) contrast(1) saturate(0.8) sepia(0.3);
           }
           70% {
             opacity: 1;
-            transform: scale(1.02) translateY(-3px);
-            filter: brightness(1.3) contrast(1) saturate(0.9);
+            transform: scale(1.01) translateY(-2px) translateX(2px);
+            filter: brightness(1.15) contrast(1) saturate(0.95) sepia(0.1);
           }
           85% {
-            transform: scale(0.99) translateY(1px);
-            filter: brightness(1.1) contrast(1) saturate(1);
+            transform: scale(1) translateY(1px) translateX(-1px);
+            filter: brightness(1.05) contrast(1) saturate(1) sepia(0);
+          }
+          95% {
+            transform: scale(1) translateY(0) translateX(0.5px);
+            filter: brightness(1) contrast(1) saturate(1) sepia(0);
           }
           100% {
             opacity: 1;
-            transform: scale(1) translateY(0);
-            filter: brightness(1) contrast(1) saturate(1);
+            transform: scale(1) translateY(0) translateX(0);
+            filter: brightness(1) contrast(1) saturate(1) sepia(0);
           }
         }
 

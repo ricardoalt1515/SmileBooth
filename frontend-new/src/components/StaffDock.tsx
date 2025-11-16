@@ -28,10 +28,17 @@ export default function StaffDock({
   return (
     <TooltipProvider delayDuration={200}>
       <div
-        className={`fixed right-6 top-1/2 -translate-y-1/2 z-50 ${className}`}
+        className={`fixed right-6 top-1/2 -translate-y-1/2 z-50 animate-slide-in-blur ${className}`}
         data-mode="staff"
       >
-        <div className="flex flex-col gap-3 bg-black/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
+        <div className="flex flex-col gap-3 glass p-3 rounded-2xl border border-white/10 relative">
+          {/* Gradient glow accent */}
+          <div
+            className="absolute inset-0 rounded-2xl opacity-30 blur-xl -z-10"
+            style={{
+              background: 'radial-gradient(circle at center, var(--primary) 0%, transparent 70%)',
+            }}
+          />
           {/* Settings */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -39,10 +46,11 @@ export default function StaffDock({
                 onClick={onOpenSettings}
                 variant="ghost"
                 size="icon"
-                className="w-14 h-14 rounded-xl hover:bg-white/10 hover:scale-110 transition-all duration-200 group"
+                className="w-14 h-14 rounded-xl hover:bg-primary/20 hover:scale-110 transition-all duration-200 group relative overflow-hidden"
                 aria-label="Configuración"
               >
-                <Settings className="w-7 h-7 text-white group-hover:rotate-90 transition-transform duration-300" />
+                <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors duration-200" />
+                <Settings className="w-7 h-7 text-white/80 group-hover:text-white group-hover:rotate-90 transition-all duration-300 relative z-10" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left" className="bg-black/95 border-white/20">

@@ -1,7 +1,4 @@
-"""
-API de Impresión
-"""
-from pathlib import Path
+"""API de Impresión"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -33,30 +30,33 @@ async def queue_print(request: PrintRequest):
     Envía una imagen a imprimir.
     """
     try:
-        file_path = Path(request.file_path)
-        
+        file_path = PrintService.resolve_data_path(request.file_path)
+
         if not file_path.exists():
             raise HTTPException(404, f"Archivo no encontrado: {file_path}")
-        
-        # Obtener impresora a usar
+
         printer_name = request.printer_name or PrintService.get_default_printer()
-        
-        # Imprimir
+        if not printer_name:
+            raise HTTPException(
+                400,
+                "No hay impresora predeterminada configurada. Selecciona una impresora en Configuración."
+            )
+
         success = PrintService.print_image(
             file_path,
             printer_name,
             request.copies
         )
-        
+
         if success:
             return PrintResponse(
                 success=True,
                 message=f"{request.copies} copias enviadas a impresora",
                 printer_used=printer_name
             )
-        else:
-            raise HTTPException(500, "Error al imprimir")
-            
+
+        raise HTTPException(500, "Error al imprimir")
+
     except HTTPException:
         raise
     except Exception as e:

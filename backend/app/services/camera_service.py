@@ -10,7 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
-from app.config import CAMERA_CONFIG, PHOTOS_DIR
+from app.config import CAMERA_CONFIG, PHOTOS_DIR, get_photo_url
+from app.schemas.session import SessionPhoto
+from app.services.session_service import SessionService
 
 
 class CameraService:
@@ -73,6 +75,17 @@ class CameraService:
             # Liberar frame de memoria
             del frame
             
+            # Registrar metadata de sesión (fail fast si algo falla)
+            photo_url = get_photo_url(filepath)
+            SessionService.append_photo(
+                session_id,
+                SessionPhoto(
+                    filename=filename,
+                    path=photo_url,
+                    url=photo_url,
+                ),
+            )
+
             return session_id, filepath
             
         except Exception as e:

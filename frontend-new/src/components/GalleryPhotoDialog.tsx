@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Download, Printer, Share2, Trash2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Download, Printer, Share2, Trash2, ChevronLeft, ChevronRight, X, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ interface GalleryPhotoDialogProps {
   onDownload?: (photo: Photo) => void;
   onPrint?: (photo: Photo) => void;
   onShare?: (photo: Photo) => void;
+  onViewStrip?: (photo: Photo) => void;
 }
 
 export default function GalleryPhotoDialog({
@@ -45,6 +47,7 @@ export default function GalleryPhotoDialog({
   onDownload,
   onPrint,
   onShare,
+  onViewStrip,
 }: GalleryPhotoDialogProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -84,7 +87,7 @@ export default function GalleryPhotoDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl bg-black/95 border-gray-700 text-white p-0">
+        <DialogContent className="max-w-5xl glass border-white/10 text-white p-0" showCloseButton={false}>
           {/* Header */}
           <DialogHeader className="p-6 pb-0">
             <div className="flex items-center justify-between">
@@ -100,6 +103,9 @@ export default function GalleryPhotoDialog({
                 <X className="w-5 h-5" />
               </Button>
             </div>
+            <DialogDescription className="sr-only">
+              Vista detallada de la foto de la galería. Usa las flechas para navegar entre fotos.
+            </DialogDescription>
             {currentPhoto.session_id && (
               <p className="text-sm text-gray-400">
                 Sesión: {currentPhoto.session_id} • {currentPhoto.timestamp || 'Sin fecha'}
@@ -161,6 +167,17 @@ export default function GalleryPhotoDialog({
               >
                 <Printer className="w-4 h-4 mr-2" />
                 Reimprimir
+              </Button>
+            )}
+
+            {onViewStrip && currentPhoto.session_id && (
+              <Button
+                onClick={() => onViewStrip(currentPhoto)}
+                variant="outline"
+                className="bg-transparent border-gray-600 text-white hover:bg-white/10"
+              >
+                <Image className="w-4 h-4 mr-2" />
+                Ver tira de sesión
               </Button>
             )}
 

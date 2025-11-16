@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from PIL import Image
 
 from app.config import DESIGNS_DIR, DATA_DIR
+from app.services.print_service import PrintService
 from app.models.template import (
     Template,
     TemplateCreate,
@@ -470,17 +471,18 @@ async def get_template_preview(template_id: str):
             raise HTTPException(404, f"Template not found: {template_id}")
         
         template = templates[template_id]
-        
+
         # Check if has design
         if not template.design_file_path:
             raise HTTPException(404, "Template has no design file")
-        
-        design_path = Path(template.design_file_path)
-        
+
+        # Use PrintService to resolve /data/... or relative paths to real disk path
+        design_path = PrintService.resolve_data_path(template.design_file_path)
+
         # Fail fast if file doesn't exist
         if not design_path.exists():
             raise HTTPException(404, "Design file not found")
-        
+
         return FileResponse(
             design_path,
             media_type=f"image/{design_path.suffix[1:]}",

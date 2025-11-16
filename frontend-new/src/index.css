@@ -1,8 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Inter Font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 /* =================================================================
-   PHOTOBOOTH DESIGN SYSTEM v1.0 - TAILWIND V4 FORMAT
+   PHOTOBOOTH DESIGN SYSTEM v2.0 - TAILWIND V4 FORMAT
+   Enhanced with modern gradients, glassmorphism, and premium animations
    Basado en documentación oficial de shadcnblocks.com
    ================================================================= */
 
@@ -62,25 +66,47 @@
    ============================================ */
 
 .dark {
-  /* Base Colors */
+  /* Base Colors - Refined Palette */
   --background: hsl(0 0% 3.9%);           /* #0a0a0a - Gris muy oscuro */
   --foreground: hsl(0 0% 98%);            /* #fafafa - Casi blanco */
+
+  /* Rich Gray Scale */
+  --gray-50: hsl(0 0% 98%);
+  --gray-100: hsl(0 0% 95%);
+  --gray-200: hsl(0 0% 85%);
+  --gray-300: hsl(0 0% 70%);
+  --gray-400: hsl(0 0% 55%);
+  --gray-500: hsl(0 0% 40%);
+  --gray-600: hsl(0 0% 30%);
+  --gray-700: hsl(0 0% 20%);
+  --gray-800: hsl(0 0% 12%);
+  --gray-900: hsl(0 0% 7%);
+  --gray-950: hsl(0 0% 3.9%);
 
   /* Card & Container */
   --card: hsl(0 0% 10%);                  /* #1a1a1a - MÁS CLARO que background */
   --card-foreground: hsl(0 0% 98%);
+  --card-elevated: hsl(0 0% 12%);         /* Cards con más elevación */
 
   /* Popover & Dropdown */
   --popover: hsl(0 0% 10%);
   --popover-foreground: hsl(0 0% 98%);
 
-  /* Primary (Magenta Night) */
+  /* Primary (Magenta Night) - With Variations */
   --primary: hsl(330 100% 50%);           /* #ff0080 */
   --primary-foreground: hsl(0 0% 100%);
+  --primary-light: hsl(330 100% 60%);     /* Lighter variant */
+  --primary-dark: hsl(330 100% 40%);      /* Darker variant */
 
-  /* Secondary */
+  /* Secondary - Cyan Accent */
   --secondary: hsl(0 0% 15.9%);
   --secondary-foreground: hsl(0 0% 98%);
+  --cyan-accent: hsl(180 100% 50%);       /* #00ffff - Complementary */
+  --cyan-soft: hsl(180 50% 50%);          /* Softer cyan */
+
+  /* Tertiary - Purple Accent */
+  --purple-accent: hsl(270 100% 60%);     /* #9f00ff */
+  --purple-soft: hsl(270 50% 50%);        /* Softer purple */
 
   /* Muted */
   --muted: hsl(0 0% 15.9%);
@@ -94,16 +120,38 @@
   --destructive: hsl(0 62.8% 30.6%);
   --destructive-foreground: hsl(0 0% 98%);
 
-  /* Borders & Inputs */
+  /* Borders & Inputs - Enhanced */
   --border: hsl(0 0% 20%);                /* Más visible */
+  --border-subtle: hsl(0 0% 15%);         /* Bordes sutiles */
+  --border-emphasis: hsl(0 0% 30%);       /* Bordes enfatizados */
   --input: hsl(0 0% 15.9%);
+  --input-focus: hsl(0 0% 20%);           /* Input en focus */
   --ring: hsl(330 100% 50%);              /* Magenta */
 
-  /* Photobooth Custom */
+  /* Semantic Colors - Enhanced */
   --success: hsl(142 76% 36%);
+  --success-light: hsl(142 76% 46%);
   --warning: hsl(38 92% 50%);
+  --warning-light: hsl(38 92% 60%);
   --error: hsl(0 84% 60%);
+  --error-light: hsl(0 84% 70%);
   --info: hsl(199 89% 48%);
+  --info-light: hsl(199 89% 58%);
+
+  /* Gradients - Unique & Elegant */
+  --gradient-primary: linear-gradient(135deg, hsl(330 100% 50%) 0%, hsl(270 100% 60%) 100%);
+  --gradient-accent: linear-gradient(135deg, hsl(180 100% 50%) 0%, hsl(270 100% 60%) 100%);
+  --gradient-subtle: linear-gradient(135deg, hsl(0 0% 10%) 0%, hsl(0 0% 15%) 100%);
+  --gradient-mesh:
+    radial-gradient(at 0% 0%, hsl(330 100% 50% / 0.3) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, hsl(270 100% 60% / 0.2) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, hsl(180 100% 50% / 0.2) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, hsl(330 100% 50% / 0.1) 0px, transparent 50%);
+
+  /* Glassmorphism */
+  --glass-bg: hsl(0 0% 10% / 0.7);
+  --glass-border: hsl(0 0% 100% / 0.1);
+  --glass-blur: 12px;
 }
 
 /* ============================================
@@ -173,14 +221,31 @@
   --line-height-relaxed: 1.75;
 
   /* ============================================
-     SHADOWS (depth system)
+     SHADOWS (enhanced depth system with colored shadows)
      ============================================ */
 
+  /* Standard Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  --shadow-glow-magenta: 0 0 20px rgb(255 0 128 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  /* Colored Glow Shadows */
+  --shadow-glow-magenta: 0 0 20px rgb(255 0 128 / 0.5), 0 0 40px rgb(255 0 128 / 0.3);
+  --shadow-glow-magenta-lg: 0 0 30px rgb(255 0 128 / 0.6), 0 0 60px rgb(255 0 128 / 0.4), 0 0 90px rgb(255 0 128 / 0.2);
+  --shadow-glow-cyan: 0 0 20px rgb(0 255 255 / 0.5), 0 0 40px rgb(0 255 255 / 0.3);
+  --shadow-glow-purple: 0 0 20px rgb(159 0 255 / 0.5), 0 0 40px rgb(159 0 255 / 0.3);
+  --shadow-glow-success: 0 0 20px hsl(142 76% 36% / 0.5);
+
+  /* Card Elevation System */
+  --shadow-card:
+    0 1px 3px 0 rgb(0 0 0 / 0.1),
+    0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --shadow-card-hover:
+    0 10px 15px -3px rgb(0 0 0 / 0.2),
+    0 4px 6px -2px rgb(0 0 0 / 0.1),
+    0 0 20px rgb(255 0 128 / 0.1);
 }
 
 /* ============================================
@@ -233,10 +298,12 @@
   body {
     @apply bg-background text-foreground;
     font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+      'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
       sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
   }
 }
 
@@ -283,3 +350,235 @@
   transition-duration: var(--duration-normal);
   transition-timing-function: var(--easing-default);
 }
+
+/* Glassmorphism Utility */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================
+   ADVANCED KEYFRAME ANIMATIONS
+   ============================================ */
+
+/* Breathe Animation - Subtle pulsing */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+/* Float Animation - Gentle hovering */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Shimmer Animation - Light sweep */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Glow Pulse - Enhanced glow effect */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: var(--shadow-glow-magenta);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: var(--shadow-glow-magenta-lg);
+    filter: brightness(1.2);
+  }
+}
+
+/* Slide In Blur - Smooth entrance with depth */
+@keyframes slide-in-blur {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+    filter: blur(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+/* Scale In - Pop entrance */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Fade In Up - Classic entrance */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Gradient Shift - Animated gradient */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Rotate 3D - Card flip effect */
+@keyframes rotate-3d {
+  0% {
+    transform: perspective(1000px) rotateY(0deg);
+  }
+  100% {
+    transform: perspective(1000px) rotateY(360deg);
+  }
+}
+
+/* Bounce Smooth - Elastic bounce */
+@keyframes bounce-smooth {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-20px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  75% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Ripple - Expanding circle */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Skeleton Loading - Shimmer placeholder */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Spin Smooth - Better loading spinner */
+@keyframes spin-smooth {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Particle Float - Random floating motion */
+@keyframes particle-float {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--particle-x, 100px), var(--particle-y, -100px)) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Animation Utility Classes */
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-slide-in-blur {
+  animation: slide-in-blur 0.5s var(--easing-default);
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s var(--easing-bounce);
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s var(--easing-default);
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+/* Stagger Delay Utilities (for sequential animations) */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }

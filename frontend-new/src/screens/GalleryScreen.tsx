@@ -43,10 +43,13 @@ export default function GalleryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
   // Cargar fotos al montar
   useEffect(() => {
-    loadGallery();
+    handleRefresh();
   }, []);
 
   // Hotkey ESC para cerrar
@@ -92,19 +95,55 @@ export default function GalleryScreen() {
     }
   };
 
+  const loadActivePreset = async () => {
+    try {
+      const data = await photoboothAPI.presets.list();
+      if (data.active_preset) {
+        setActivePresetId(data.active_preset.id);
+        setActivePresetName(data.active_preset.name);
+      } else {
+        setActivePresetId(null);
+        setActivePresetName(null);
+      }
+    } catch (error) {
+      console.error('Error loading active preset:', error);
+    }
+  };
+
+  const handleRefresh = () => {
+    void loadGallery();
+    void loadActivePreset();
+  };
+
   const handleExportZip = async () => {
     if (photos.length === 0) {
       toast.warning('No hay fotos para exportar');
       return;
     }
 
+    if (!activePresetId) {
+      toast.warning('No hay evento activo para exportar. Configura un evento en Configuración.');
+      return;
+    }
+
     setIsExporting(true);
     try {
-      await photoboothAPI.gallery.exportZip();
-      toast.success('ZIP descargado correctamente');
+      const result = await photoboothAPI.sessions.export({
+        preset_id: activePresetId,
+      });
+
+      const downloadUrl = `${API_BASE_URL}${result.url}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = result.filename || 'evento_photobooth.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success('ZIP del evento descargado correctamente');
     } catch (error) {
-      console.error('Error exporting ZIP:', error);
-      toast.error('Error al exportar ZIP');
+      console.error('Error exporting event ZIP:', error);
+      toast.error('Error al exportar evento');
     } finally {
       setIsExporting(false);
     }
@@ -118,6 +157,64 @@ export default function GalleryScreen() {
     } catch (error) {
       console.error('Error clearing gallery:', error);
       toast.error('Error al limpiar galería');
+    }
+  };
+
+  const handlePrintPhoto = async (photo: { url: string; session_id?: string; filename?: string; path?: string }) => {
+    if (!photo) return;
+
+    try {
+      setIsPrinting(true);
+
+      // 1) Intentar reimpresión de la tira completa usando la sesión
+      if (photo.session_id) {
+        try {
+          const response = await photoboothAPI.sessions.reprint(photo.session_id, {
+            copies: 1,
+          });
+          console.log('✅ Reimpresión por sesión desde galería:', response);
+          toast.success('Reimpresión enviada para la sesión');
+          return;
+        } catch (sessionError) {
+          console.warn('⚠️ Error en reimpresión por sesión, usando impresión directa:', sessionError);
+        }
+      }
+
+      // 2) Fallback: imprimir directamente la foto mostrada
+      const filePath = photo.path || photo.url.replace(API_BASE_URL, '');
+      const result = await photoboothAPI.print.queue({
+        file_path: filePath,
+        copies: 1,
+      });
+      console.log('✅ Impresión directa desde galería:', result);
+      toast.success('Impresión enviada');
+    } catch (error) {
+      console.error('❌ Error al imprimir desde galería:', error);
+      toast.error('Error al enviar a imprimir');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  const handleViewStrip = async (photo: { session_id?: string }) => {
+    if (!photo.session_id) {
+      toast.warning('No se encontró la sesión asociada a esta foto');
+      return;
+    }
+
+    try {
+      const record = await photoboothAPI.sessions.get(photo.session_id);
+
+      if (!record || !record.strip_path) {
+        toast.warning('Esta sesión no tiene tira guardada');
+        return;
+      }
+
+      const stripUrl = `${API_BASE_URL}${record.strip_path}`;
+      window.open(stripUrl, '_blank');
+    } catch (error) {
+      console.error('Error al cargar tira de sesión:', error);
+      toast.error('Error al mostrar la tira de la sesión');
     }
   };
 
@@ -136,9 +233,15 @@ export default function GalleryScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white p-8">
+    <div className="min-h-screen bg-black text-white p-8 relative overflow-hidden">
+      {/* Animated gradient mesh background */}
+      <div
+        className="absolute inset-0 opacity-30 pointer-events-none"
+        style={{ background: 'var(--gradient-mesh)' }}
+      />
+
       {/* Header */}
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto relative z-10">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Camera className="w-10 h-10 text-[#ff0080]" />
@@ -158,37 +261,53 @@ export default function GalleryScreen() {
           </button>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Enhanced with animations */}
         {stats && (
           <div className="grid grid-cols-4 gap-4 mb-8">
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                <p className="text-sm text-gray-400">Sesiones</p>
+            <div className="glass rounded-xl p-6 border border-white/10 group hover:border-blue-400/50 transition-all duration-300 hover:-translate-y-1 animate-fade-in-up stagger-1">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-400/20 rounded-lg group-hover:scale-110 transition-transform">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <p className="text-sm text-white/60 font-medium">Sesiones</p>
+                </div>
               </div>
-              <p className="text-3xl font-bold">{stats.total_sessions}</p>
+              <p className="text-4xl font-bold">{stats.total_sessions}</p>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <ImageIcon className="w-5 h-5 text-green-400" />
-                <p className="text-sm text-gray-400">Fotos</p>
+            <div className="glass rounded-xl p-6 border border-white/10 group hover:border-green-400/50 transition-all duration-300 hover:-translate-y-1 animate-fade-in-up stagger-2">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-green-400/20 rounded-lg group-hover:scale-110 transition-transform">
+                    <ImageIcon className="w-5 h-5 text-green-400" />
+                  </div>
+                  <p className="text-sm text-white/60 font-medium">Fotos</p>
+                </div>
               </div>
-              <p className="text-3xl font-bold">{stats.total_photos}</p>
+              <p className="text-4xl font-bold">{stats.total_photos}</p>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <Download className="w-5 h-5 text-purple-400" />
-                <p className="text-sm text-gray-400">Tamaño</p>
+            <div className="glass rounded-xl p-6 border border-white/10 group hover:border-purple-400/50 transition-all duration-300 hover:-translate-y-1 animate-fade-in-up stagger-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-400/20 rounded-lg group-hover:scale-110 transition-transform">
+                    <Download className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <p className="text-sm text-white/60 font-medium">Tamaño</p>
+                </div>
               </div>
-              <p className="text-3xl font-bold">{stats.total_size_mb} MB</p>
+              <p className="text-4xl font-bold">{stats.total_size_mb} MB</p>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-              <div className="flex items-center gap-3 mb-2">
-                <Camera className="w-5 h-5 text-[#ff0080]" />
-                <p className="text-sm text-gray-400">Última</p>
+            <div className="glass rounded-xl p-6 border border-white/10 group hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 animate-fade-in-up stagger-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-primary/20 rounded-lg group-hover:scale-110 transition-transform">
+                    <Camera className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-sm text-white/60 font-medium">Última</p>
+                </div>
               </div>
               <p className="text-lg font-bold truncate">
                 {stats.latest_session ? formatTimestamp(stats.latest_session) : 'N/A'}
@@ -201,15 +320,19 @@ export default function GalleryScreen() {
         <div className="flex gap-4 mb-8">
           <button
             onClick={handleExportZip}
-            disabled={isExporting || photos.length === 0}
+            disabled={isExporting || photos.length === 0 || !activePresetId}
             className="flex items-center gap-2 px-6 py-3 bg-[#ff0080] hover:bg-[#ff0080]/80 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-5 h-5" />
-            {isExporting ? 'Exportando...' : 'Exportar ZIP'}
+            {isExporting
+              ? 'Exportando...'
+              : activePresetName
+                ? `Exportar ${activePresetName}`
+                : 'Configura un evento en Configuración'}
           </button>
 
           <button
-            onClick={loadGallery}
+            onClick={handleRefresh}
             disabled={isLoading}
             className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-all"
           >
@@ -248,6 +371,7 @@ export default function GalleryScreen() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
         </div>
 
         {/* Photos Grid */}
@@ -264,17 +388,47 @@ export default function GalleryScreen() {
           </div>
         ) : (
           <div className="grid grid-cols-6 gap-4">
-            {photos.map((photo) => (
+            {photos.map((photo, index) => (
               <div
                 key={photo.id}
                 onClick={() => setSelectedPhoto(photo)}
-                className="aspect-square rounded-lg overflow-hidden cursor-pointer hover:ring-4 hover:ring-[#ff0080] transition-all duration-300 hover:scale-105 group"
+                className="aspect-square rounded-xl overflow-hidden cursor-pointer group relative animate-scale-in"
+                style={{ animationDelay: `${(index % 12) * 0.05}s` }}
               >
+                {/* Image */}
                 <img
                   src={photo.url}
                   alt={photo.filename}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110 group-hover:brightness-75"
                 />
+
+                {/* Gradient overlay on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                {/* Border glow */}
+                <div
+                  className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-primary transition-all duration-300 pointer-events-none"
+                  style={{
+                    boxShadow: '0 0 0 0 var(--primary)',
+                    transition: 'box-shadow 0.3s, border-color 0.3s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = 'var(--shadow-glow-magenta)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 0 0 var(--primary)';
+                  }}
+                />
+
+                {/* Hover info */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-10">
+                  <p className="text-xs font-medium truncate">
+                    {formatTimestamp(photo.timestamp)}
+                  </p>
+                  <p className="text-[10px] text-white/60 truncate">
+                    {photo.filename}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -294,9 +448,25 @@ export default function GalleryScreen() {
         onOpenChange={(open) => !open && setSelectedPhoto(null)}
         onDelete={async (photo) => {
           try {
-            // TODO: Implement delete single photo endpoint
-            toast.info('Función de eliminar individual próximamente');
+            if (!photo.session_id || !photo.filename) {
+              toast.error('No se puede identificar la foto a eliminar');
+              return;
+            }
+
+            const result = await photoboothAPI.gallery.deletePhoto(
+              photo.session_id,
+              photo.filename,
+            );
+
+            if (result.success) {
+              toast.success('Foto eliminada de la galería');
+              setSelectedPhoto(null);
+              await loadGallery();
+            } else {
+              toast.error(result.message || 'Error al eliminar foto');
+            }
           } catch (error) {
+            console.error('Error deleting photo:', error);
             toast.error('Error al eliminar foto');
           }
         }}
@@ -310,10 +480,15 @@ export default function GalleryScreen() {
           toast.success('Descargando foto...');
         }}
         onPrint={(photo) => {
-          toast.info('Función de reimprimir próximamente');
+          if (!isPrinting) {
+            void handlePrintPhoto(photo);
+          }
         }}
-        onShare={(photo) => {
+        onShare={(_photo) => {
           toast.info('Función de compartir próximamente');
+        }}
+        onViewStrip={(photo) => {
+          void handleViewStrip(photo);
         }}
       />
     </div>

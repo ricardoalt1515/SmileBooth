@@ -200,6 +200,43 @@ async def export_photos_zip():
         )
 
 
+@router.delete("/sessions/{session_id}/photos/{filename}")
+async def delete_photo(session_id: str, filename: str):
+    """Elimina una foto individual de una sesión.
+
+    No toca metadata de sesiones; solo elimina el archivo físico y limpia
+    la carpeta de sesión si queda vacía.
+    """
+    try:
+        session_dir = PHOTOS_DIR / session_id
+        photo_path = session_dir / filename
+
+        if not photo_path.exists() or not photo_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Foto no encontrada: {session_id}/{filename}",
+            )
+
+        photo_path.unlink()
+
+        # Eliminar carpeta de sesión si está vacía
+        if session_dir.exists() and not any(session_dir.iterdir()):
+            session_dir.rmdir()
+
+        return {
+            "success": True,
+            "message": f"Foto {filename} eliminada de sesión {session_id}",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al eliminar foto: {str(e)}",
+        )
+
+
 @router.delete("/clear-all")
 async def clear_all_photos():
     """

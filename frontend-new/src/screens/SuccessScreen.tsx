@@ -4,12 +4,15 @@ import { useAppStore } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI from '../services/api';
 import { useAudio, useSoundEffects } from '../hooks/useAudio';
+import { Button } from '@/components/ui/button';
+import Confetti from '../components/Confetti';
 
 export default function SuccessScreen() {
   const {
     capturedImages,
     stripId,        // strip_path (tira simple)
     stripImageUrl,  // full_page_path (formato 2x para imprimir)
+    sessionId,
     autoResetSeconds,
     reset,
     setCurrentScreen,
@@ -59,10 +62,9 @@ export default function SuccessScreen() {
   };
 
   const handlePrint = async () => {
-    // ✅ Imprimir el FULL_PAGE_PATH (formato 2x - 2 tiras en 1 hoja)
-    const pathToRint = stripImageUrl || stripId;
-    
-    if (!pathToRint) {
+    const pathToPrint = stripImageUrl || stripId;
+
+    if (!pathToPrint) {
       speak('No hay strip para imprimir.', { rate: 1.0 });
       toast.error('No hay strip para imprimir');
       return;
@@ -72,14 +74,29 @@ export default function SuccessScreen() {
       setIsPrinting(true);
       speak('Enviando a impresora. Espera un momento.', { rate: 1.1 });
       
-      // ✅ IMPRIMIR CON BACKEND
-      // Usa full_page_path que tiene 2 tiras (formato 2x)
+      // 1) Intentar reimpresión basada en sesión (para tracking y metadata)
+      if (sessionId) {
+        try {
+          const reprintResponse = await photoboothAPI.sessions.reprint(sessionId, {
+            copies: 1,
+            file_path: pathToPrint,
+          });
+          console.log('✅ Reimpresión por sesión:', reprintResponse);
+          speak('Impresión enviada. Recoge tus fotos en la impresora.', { rate: 1.0 });
+          toast.success('¡Impresión enviada desde la sesión actual!');
+          return;
+        } catch (sessionError) {
+          console.warn('⚠️ Error en reimpresión por sesión, usando impresión directa:', sessionError);
+        }
+      }
+
+      // 2) Fallback robusto: impresión directa del archivo
       const printResponse = await photoboothAPI.print.queue({
-        file_path: pathToRint,  // full_page_path (1200x1800)
-        copies: 1,  // 1 hoja = 2 tiras (cliente corta por la mitad)
+        file_path: pathToPrint,
+        copies: 1,
       });
-      
-      console.log('✅ Impresión enviada:', printResponse);
+
+      console.log('✅ Impresión directa enviada:', printResponse);
       speak('Impresión enviada. Recoge tus fotos en la impresora.', { rate: 1.0 });
       toast.success(`¡Impresión enviada! ${printResponse.message}`);
     } catch (error) {
@@ -102,12 +119,30 @@ export default function SuccessScreen() {
   };
 
   return (
-    <div className="relative h-screen w-screen bg-gradient-to-br from-green-600 via-blue-600 to-purple-700 overflow-hidden">
+    <div className="relative h-screen w-screen bg-black overflow-hidden">
+      {/* Confetti celebration */}
+      <Confetti active={true} count={50} duration={4000} />
+
+      {/* Gradient mesh background */}
+      <div
+        className="absolute inset-0 opacity-40 pointer-events-none"
+        style={{ background: 'var(--gradient-mesh)' }}
+      />
+
+      {/* Radial glow */}
+      <div
+        className="absolute inset-0 opacity-30"
+        style={{
+          background: 'radial-gradient(circle at 50% 50%, var(--primary) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Floating particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={i}
-            className="absolute w-4 h-4 bg-white rounded-full opacity-70 animate-float"
+            className="absolute w-2 h-2 rounded-full bg-primary/50 animate-float"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -118,26 +153,48 @@ export default function SuccessScreen() {
         ))}
       </div>
 
+      {/* Main content */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-8 text-white">
-        <div className="mb-8 animate-bounce">
-          <CheckCircle className="w-32 h-32 text-white fill-green-400" />
+        {/* Success icon with glow */}
+        <div className="mb-8 animate-scale-in">
+          <div className="relative">
+            {/* Glow effect */}
+            <div
+              className="absolute inset-0 rounded-full blur-2xl opacity-50"
+              style={{ background: 'var(--gradient-primary)' }}
+            />
+            <CheckCircle
+              className="relative w-32 h-32 text-white"
+              style={{
+                filter: 'drop-shadow(0 0 30px var(--primary))',
+              }}
+            />
+          </div>
         </div>
 
-        <h1 className="text-7xl font-bold mb-4 text-center animate-pulse">
+        {/* Title with gradient */}
+        <h1 className="text-7xl font-bold mb-4 text-center gradient-text animate-fade-in-up">
           ¡Listo!
         </h1>
 
-        <p className="text-3xl mb-12 text-center">
+        <p className="text-3xl mb-12 text-center text-white/80 animate-fade-in-up">
           Tus fotos están listas
         </p>
 
+        {/* Photo preview with stagger */}
         <div className="mb-12 flex justify-center gap-4 flex-wrap max-w-4xl">
           {capturedImages.map((img, index) => (
             <div
               key={img.id}
-              className="w-48 h-48 rounded-2xl overflow-hidden shadow-2xl transform hover:scale-105 transition-transform duration-300 border-4 border-white"
+              className={`
+                w-48 h-48 rounded-2xl overflow-hidden
+                transform hover:scale-110 hover:-rotate-2
+                transition-all duration-300
+                border-[3px] stagger-${(index % 5) + 1} animate-scale-in
+              `}
               style={{
-                animation: `slideIn 0.5s ease-out ${index * 0.1}s both`,
+                borderColor: 'var(--primary)',
+                boxShadow: 'var(--shadow-glow-magenta)',
               }}
             >
               <img
@@ -149,59 +206,72 @@ export default function SuccessScreen() {
           ))}
         </div>
 
-        <div className="flex gap-6 mb-8">
-          <button
+        {/* Action buttons using shadcn Button */}
+        <div className="flex gap-6 mb-8 flex-wrap justify-center">
+          <Button
             onClick={handlePrint}
             disabled={isPrinting}
-            className={`flex items-center gap-3 px-8 py-4 bg-white text-purple-700 rounded-full text-xl font-bold shadow-2xl hover:scale-110 transition-transform duration-300 ${
-              isPrinting ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            size="lg"
+            className="
+              px-8 py-6 text-xl h-auto rounded-full
+              bg-white text-black hover:bg-white/90
+              shadow-2xl
+            "
           >
-            <Printer className="w-6 h-6" />
+            <Printer className="w-6 h-6 mr-3" />
             {isPrinting ? 'Imprimiendo...' : 'Imprimir'}
-          </button>
+          </Button>
 
-          <button
+          <Button
             onClick={handleDownload}
-            className="flex items-center gap-3 px-8 py-4 bg-white text-blue-700 rounded-full text-xl font-bold shadow-2xl hover:scale-110 transition-transform duration-300"
+            variant="outline"
+            size="lg"
+            className="
+              px-8 py-6 text-xl h-auto rounded-full
+              glass border-white/30 text-white
+              hover:bg-white/10 hover:border-white/50
+              shadow-2xl
+            "
           >
-            <Download className="w-6 h-6" />
+            <Download className="w-6 h-6 mr-3" />
             Descargar
-          </button>
+          </Button>
 
-          <button
+          <Button
             onClick={handleReset}
-            className="flex items-center gap-3 px-8 py-4 bg-white text-green-700 rounded-full text-xl font-bold shadow-2xl hover:scale-110 transition-transform duration-300"
+            variant="outline"
+            size="lg"
+            className="
+              px-8 py-6 text-xl h-auto rounded-full
+              glass border-primary/30 text-white
+              hover:bg-primary/20 hover:border-primary/50
+              shadow-2xl
+            "
           >
-            <RotateCcw className="w-6 h-6" />
+            <RotateCcw className="w-6 h-6 mr-3" />
             Nueva Sesión
-          </button>
+          </Button>
         </div>
 
-        <div className="text-center text-white/80">
+        {/* Countdown with pulse */}
+        <div className="text-center text-white/80 glass px-8 py-4 rounded-2xl border border-white/10">
           <p className="text-lg">
             Nueva sesión automática en{' '}
-            <span className="text-2xl font-bold">{countdown}</span> segundos
+            <span
+              className="text-3xl font-bold animate-pulse"
+              style={{
+                color: countdown <= 5 ? 'var(--primary)' : 'white',
+              }}
+            >
+              {countdown}
+            </span>{' '}
+            segundos
           </p>
-          <p className="text-sm mt-2">O presiona &quot;Nueva Sesión&quot; para comenzar ahora</p>
+          <p className="text-sm mt-2 text-white/60">
+            O presiona "Nueva Sesión" para comenzar ahora
+          </p>
         </div>
       </div>
-
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-100vh) rotate(360deg); }
-        }
-
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(50px) scale(0.8); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        .animate-float {
-          animation: float 5s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 }

@@ -4,15 +4,81 @@ Servicio de Impresión - Optimizado para macOS/Windows
 - Manejo de cola
 - Detección automática de impresora
 """
+import json
 import platform
 from pathlib import Path
 from typing import Optional, List
 import subprocess
+import os
+
+from app.config import DATA_DIR
+
+PRINT_SIMULATION = os.getenv("PRINT_SIMULATION", "0") == "1"
 
 
 class PrintService:
     """Servicio de impresión multiplataforma"""
     
+    @staticmethod
+    def resolve_data_path(file_path: str) -> Path:
+        """Normaliza rutas de archivos a paths reales en disco.
+
+        Acepta:
+        - URLs tipo "/data/..." que vienen del frontend
+        - Rutas relativas "data/..." internas
+        - Rutas relativas dentro de DATA_DIR
+        - Rutas absolutas reales (no prefijadas con /data)
+        """
+        if not file_path or not str(file_path).strip():
+            raise ValueError("file_path vacío en resolve_data_path")
+
+        path_str = str(file_path)
+
+        # Mapear mount "/data/..." al directorio DATA_DIR (fail fast para el caso común)
+        if path_str.startswith('/data/'):
+            relative = path_str.replace('/data/', '')
+            return DATA_DIR / relative
+
+        # Soportar rutas relativas "data/..." sin slash inicial
+        if path_str.startswith('data/'):
+            relative = path_str.replace('data/', '')
+            return DATA_DIR / relative
+
+        candidate = Path(path_str)
+
+        # Para rutas absolutas reales (no del mount /data), respetar tal cual
+        if candidate.is_absolute():
+            return candidate
+
+        # Fallback: tratar como ruta relativa dentro de DATA_DIR
+        return DATA_DIR / candidate
+
+    # ---------- Helpers de configuración ----------
+
+    @staticmethod
+    def _load_default_printer_from_settings() -> Optional[str]:
+        """Lee default_printer desde settings.json si existe.
+
+        Mantiene la lógica de configuración en un solo lugar
+        y evita depender de routers FastAPI.
+        """
+        settings_file = DATA_DIR / "config" / "settings.json"
+
+        if not settings_file.exists():
+            return None
+
+        try:
+            with settings_file.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            # Fail fast: cadena vacía cuenta como no configurada
+            printer = (data or {}).get("default_printer")
+            if isinstance(printer, str) and printer.strip():
+                return printer.strip()
+            return None
+        except Exception as exc:  # pragma: no cover - solo logging defensivo
+            print(f"Error leyendo default_printer de settings.json: {exc}")
+            return None
+
     @staticmethod
     def get_available_printers() -> List[str]:
         """
@@ -75,9 +141,25 @@ class PrintService:
     
     @staticmethod
     def get_default_printer() -> Optional[str]:
-        """Obtiene la impresora predeterminada"""
+        """Obtiene la impresora predeterminada.
+
+        Orden de prioridad:
+        1) Impresora configurada en settings.json (default_printer)
+        2) Modo simulación (PRINT_SIMULATION)
+        3) Impresora predeterminada del sistema operativo
+        """
+        # 1) Intentar usar la impresora configurada en settings.json
+        configured = PrintService._load_default_printer_from_settings()
+        if configured:
+            return configured
+
+        # 2) Modo simulación: forzar impresora ficticia en desarrollo/pruebas
+        if PRINT_SIMULATION:
+            return "SIMULATED_PRINTER"
+
+        # 3) Fallback al default del sistema operativo
         system = platform.system()
-        
+
         try:
             if system == "Darwin":  # macOS
                 result = subprocess.run(
@@ -91,14 +173,13 @@ class PrintService:
                     output = result.stdout.strip()
                     if 'destination:' in output:
                         return output.split('destination:')[1].strip()
-                return None
-                
+
             elif system == "Windows":
                 import win32print
                 return win32print.GetDefaultPrinter()
-                
+
             return None
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - dependiente de SO
             print(f"Error al obtener impresora predeterminada: {e}")
             return None
     
@@ -119,6 +200,11 @@ class PrintService:
         Returns:
             True si la impresión fue exitosa
         """
+        if PRINT_SIMULATION:
+            target_printer = printer_name or "SIMULATED_PRINTER"
+            print(f"SIMULATED PRINT -> {image_path} x{copies} on {target_printer}")
+            return True
+
         if not image_path.exists():
             raise FileNotFoundError(f"Imagen no encontrada: {image_path}")
         

@@ -11,7 +11,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import camera, image, print as print_api, designs, settings, gallery, presets, templates
+from app.api import (
+    camera,
+    image,
+    print as print_api,
+    designs,
+    settings,
+    gallery,
+    presets,
+    templates,
+    sessions,
+)
 from app.config import API_CONFIG
 
 
@@ -60,6 +70,7 @@ app.include_router(templates.router)  # New templates API
 app.include_router(settings.router)
 app.include_router(gallery.router)
 app.include_router(presets.router)
+app.include_router(sessions.router)
 
 # Servir archivos estáticos (fotos capturadas)
 # Las fotos se guardan en /photobooth/data/ (raíz del proyecto, no en backend/data/)

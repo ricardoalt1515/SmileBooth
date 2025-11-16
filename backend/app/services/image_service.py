@@ -22,7 +22,23 @@ from pathlib import Path
 from typing import List, Optional
 from PIL import Image, ImageDraw, ImageFont
 
-from app.config import IMAGE_CONFIG, STRIPS_DIR
+from app.config import IMAGE_CONFIG, STRIPS_DIR, get_photo_url
+from app.services.session_service import SessionService
+from app.models.template import (
+    DESIGN_POSITION_TOP,
+    DESIGN_POSITION_BOTTOM,
+    LAYOUT_VERTICAL_3,
+    LAYOUT_VERTICAL_4,
+    LAYOUT_VERTICAL_6,
+    LAYOUT_GRID_2X2,
+    get_layout_dimensions,
+)
+
+SUPPORTED_VERTICAL_LAYOUTS = {
+    LAYOUT_VERTICAL_3,
+    LAYOUT_VERTICAL_4,
+    LAYOUT_VERTICAL_6,
+}
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -82,12 +98,13 @@ class ImageService:
             raise ValueError(f"Se requieren entre 1 y 6 fotos, recibido: {len(photo_paths)}")
         
         # Configuración base (evitar magic numbers, usar defaults si no se proveen)
-        STRIP_WIDTH = IMAGE_CONFIG["strip_width"]
-        BASE_PHOTO_HEIGHT = IMAGE_CONFIG["photo_height"]
+        base_strip_width = IMAGE_CONFIG["strip_width"]
+        base_photo_height = IMAGE_CONFIG["photo_height"]
         DESIGN_HEIGHT = IMAGE_CONFIG["design_height"]
         TOP_MARGIN = 30
         BOTTOM_MARGIN = 30
         PHOTO_SPACING = photo_spacing if photo_spacing is not None else 5
+
         
         # Convertir color de fondo de hex a RGB (PIL requiere tupla RGB)
         if background_color and background_color.startswith('#'):
@@ -100,18 +117,63 @@ class ImageService:
             BACKGROUND_COLOR = 'white'  # Default
             print(f"🎨 Color de fondo: white (default)")
         
+        # Determinar layout soportado (solo verticales por ahora)
+        layout_clean = (layout or '').strip().lower()
+        layout_supported = layout_clean if layout_clean in SUPPORTED_VERTICAL_LAYOUTS else None
+        if layout_clean and not layout_supported and layout_clean != LAYOUT_GRID_2X2:
+            print(f"⚠️ layout '{layout}' no soportado aún. Usando layout dinámico por defecto.")
+
+        # Determinar posición válida del diseño (solo soportamos top/bottom por ahora)
+        design_position_normalized = (design_position or DESIGN_POSITION_BOTTOM).lower()
+        if design_position_normalized not in {DESIGN_POSITION_TOP, DESIGN_POSITION_BOTTOM}:
+            print(f"⚠️ design_position '{design_position}' no soportado. Usando 'bottom'.")
+            design_position_normalized = DESIGN_POSITION_BOTTOM
+
+        design_exists = bool(design_path and design_path.exists())
+
+        # Calcular dimensiones objetivo basadas en layout
+        strip_width = base_strip_width
+        target_strip_height = None
+        if layout_supported:
+            strip_width, target_strip_height = get_layout_dimensions(layout_supported)  # type: ignore[arg-type]
+
         # Calcular altura total del canvas dinámicamente
         num_photos = len(photo_paths)
-        total_photos_height = (BASE_PHOTO_HEIGHT * num_photos) + (PHOTO_SPACING * (num_photos - 1))
-        design_section_height = DESIGN_HEIGHT + PHOTO_SPACING if design_path and design_path.exists() else 0
-        strip_height = TOP_MARGIN + total_photos_height + design_section_height + BOTTOM_MARGIN
-        
+        design_section_height = DESIGN_HEIGHT + PHOTO_SPACING if design_exists else 0
+
+        if target_strip_height:
+            available_height = target_strip_height - TOP_MARGIN - BOTTOM_MARGIN - design_section_height
+            available_for_photos = available_height - (PHOTO_SPACING * (num_photos - 1))
+            if available_for_photos <= 0:
+                print("⚠️ Altura insuficiente para fotos con layout fijo. Usando altura base.")
+                target_photo_height = base_photo_height
+                strip_height = TOP_MARGIN + (base_photo_height * num_photos) + (PHOTO_SPACING * (num_photos - 1)) + design_section_height + BOTTOM_MARGIN
+            else:
+                target_photo_height = int(available_for_photos / num_photos)
+                strip_height = target_strip_height
+        else:
+            target_photo_height = base_photo_height
+            total_photos_height = (target_photo_height * num_photos) + (PHOTO_SPACING * (num_photos - 1))
+            strip_height = TOP_MARGIN + total_photos_height + design_section_height + BOTTOM_MARGIN
+
         # Crear canvas con color de fondo personalizado
-        strip = Image.new('RGB', (STRIP_WIDTH, strip_height), BACKGROUND_COLOR)
+        strip = Image.new('RGB', (strip_width, strip_height), BACKGROUND_COLOR)
         
         try:
             # Y offset inicial
             y_offset = TOP_MARGIN
+
+            # 0. Agregar diseño arriba si aplica
+            if design_exists and design_position_normalized == DESIGN_POSITION_TOP:
+                y_offset = ImageService._paste_design(
+                    strip,
+                    design_path,
+                    strip_width,
+                    DESIGN_HEIGHT,
+                    y_offset,
+                    add_spacing=True,
+                    spacing=PHOTO_SPACING
+                )
             
             # 1. Procesar y agregar las fotos UNA POR UNA
             for i, photo_path in enumerate(photo_paths):
@@ -121,8 +183,8 @@ class ImageService:
                 # Procesar foto
                 photo_processed = ImageService._process_photo(
                     photo, 
-                    STRIP_WIDTH - 50,  # Ancho con margen lateral
-                    BASE_PHOTO_HEIGHT
+                    strip_width - 50,  # Ancho con margen lateral
+                    target_photo_height
                 )
                 
                 # Liberar foto original
@@ -130,7 +192,7 @@ class ImageService:
                 del photo
                 
                 # Calcular posición centrada
-                x_pos = (STRIP_WIDTH - photo_processed.width) // 2
+                x_pos = (strip_width - photo_processed.width) // 2
                 
                 # Pegar en strip
                 strip.paste(photo_processed, (x_pos, y_offset))
@@ -143,41 +205,25 @@ class ImageService:
                 gc.collect()
                 
                 # Siguiente posición
-                y_offset += BASE_PHOTO_HEIGHT + PHOTO_SPACING
+                y_offset += target_photo_height + PHOTO_SPACING
             
-            # 2. Agregar diseño si existe
-            if design_path and design_path.exists():
-                design = Image.open(design_path)
-                
-                # Redimensionar si es necesario
-                if design.size != (STRIP_WIDTH, DESIGN_HEIGHT):
-                    design = design.resize(
-                        (STRIP_WIDTH, DESIGN_HEIGHT),
-                        Image.Resampling.LANCZOS
-                    )
-                
-                # Posición del diseño (al final después de todas las fotos)
-                design_y = y_offset
-                
-                # Si tiene transparencia, componer correctamente
-                if design.mode == 'RGBA':
-                    bg = Image.new('RGB', design.size, 'white')
-                    bg.paste(design, (0, 0), design)
-                    strip.paste(bg, (0, design_y))
-                    bg.close()
-                else:
-                    strip.paste(design, (0, design_y))
-                
-                # Liberar diseño
-                design.close()
-                del design
-                gc.collect()
+            # 2. Agregar diseño abajo si aplica
+            if design_exists and design_position_normalized == DESIGN_POSITION_BOTTOM:
+                ImageService._paste_design(
+                    strip,
+                    design_path,
+                    strip_width,
+                    DESIGN_HEIGHT,
+                    y_offset,
+                    add_spacing=False,
+                    spacing=PHOTO_SPACING
+                )
             
             # 3. Guardar strip
             output_dir = STRIPS_DIR / session_id if session_id else STRIPS_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            output_filename = f"strip_{session_id}.jpg"
+            output_filename = f"strip_{session_id}.jpg" if session_id else "strip_preview.jpg"
             output_path = output_dir / output_filename
             
             # Guardar con compresión optimizada
@@ -188,7 +234,12 @@ class ImageService:
                 dpi=IMAGE_CONFIG["dpi"],
                 optimize=True  # Optimizar tamaño de archivo
             )
-            
+
+            # Registrar strip en metadata de sesión (solo para sesiones reales)
+            if session_id:
+                strip_url = get_photo_url(output_path)
+                SessionService.set_strip(session_id, strip_url)
+
             return output_path
             
         finally:
@@ -239,6 +290,45 @@ class ImageService:
         del resized
         
         return cropped
+
+    @staticmethod
+    def _paste_design(
+        canvas: Image.Image,
+        design_path: Path,
+        target_width: int,
+        target_height: int,
+        y_offset: int,
+        add_spacing: bool,
+        spacing: int
+    ) -> int:
+        """Coloca el diseño en el canvas y devuelve el nuevo offset."""
+        design = Image.open(design_path)
+
+        try:
+            if design.size != (target_width, target_height):
+                design = design.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS
+                )
+
+            # Manejar transparencia
+            if design.mode == 'RGBA':
+                bg = Image.new('RGB', design.size, 'white')
+                bg.paste(design, (0, 0), design)
+                canvas.paste(bg, (0, y_offset))
+                bg.close()
+            else:
+                canvas.paste(design, (0, y_offset))
+
+            new_offset = y_offset + target_height
+            if add_spacing:
+                new_offset += spacing
+
+            return new_offset
+        finally:
+            design.close()
+            del design
+            gc.collect()
     
     @staticmethod
     def create_duplicate_strip(strip_path: Path) -> Path:
