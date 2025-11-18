@@ -18,6 +18,8 @@ class ComposeStripRequest(BaseModel):
     design_position: str | None = None  # "top", "bottom", "left", "right"
     background_color: str | None = None  # "#ffffff" (hex color)
     photo_spacing: int | None = None  # Espaciado entre fotos en px
+    photo_filter: str | None = None  # Filtro de fotos: none, bw, sepia, glam
+    print_mode: str | None = None  # single | dual-strip
 
 
 class ComposeStripResponse(BaseModel):

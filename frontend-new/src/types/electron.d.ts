@@ -6,6 +6,8 @@
 export interface ElectronAPI {
   onOpenSettings: (callback: () => void) => void;
   removeOpenSettingsListener: (callback: () => void) => void;
+  setKioskMode: (enable: boolean) => Promise<boolean>;
+  exitKiosk: () => Promise<boolean>;
 }
 
 declare global {

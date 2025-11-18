@@ -30,6 +30,7 @@ class EventPreset(BaseModel):
     voice_rate: float = Field(default=1.0, ge=0.5, le=2.0, description="Velocidad de voz")
     voice_pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="Tono de voz")
     voice_volume: float = Field(default=1.0, ge=0.0, le=1.0, description="Volumen de voz")
+    photo_filter: str = Field(default="none", description="Filtro de fotos: none, bw, sepia, glam")
     
     # Template asociado
     template_id: Optional[str] = Field(None, description="ID del template asociado")
@@ -69,6 +70,7 @@ class PresetCreate(BaseModel):
     voice_volume: float = 1.0
     template_id: Optional[str] = None  # New: reference to template
     design_id: Optional[str] = None  # Deprecated: keep for backward compatibility
+    photo_filter: Optional[str] = None
     notes: Optional[str] = None
     client_name: Optional[str] = None
     client_contact: Optional[str] = None
@@ -88,6 +90,7 @@ class PresetUpdate(BaseModel):
     voice_volume: Optional[float] = None
     template_id: Optional[str] = None  # New: reference to template
     design_id: Optional[str] = None  # Deprecated: keep for backward compatibility
+    photo_filter: Optional[str] = None
     notes: Optional[str] = None
     client_name: Optional[str] = None
     client_contact: Optional[str] = None

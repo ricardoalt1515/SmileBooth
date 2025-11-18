@@ -38,11 +38,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import EventsManager from '../components/EventsManager';
 import TemplatesManager from '../components/TemplatesManager';
 import StripPreview from '../components/StripPreview';
 
 const TAB_PANEL_CLASS = 'space-y-6 max-h-[calc(100vh-220px)] overflow-y-auto pr-3 w-full';
+const UI_PREF_STORAGE_KEY = 'photobooth_ui_preferences';
 
 export default function SettingsScreen() {
   const {
@@ -54,6 +56,9 @@ export default function SettingsScreen() {
     voiceVolume,
     loadSettings,
     setCurrentScreen,
+    mirrorPreview,
+    kioskMode,
+    setSettings,
   } = useAppStore();
 
   const toast = useToastContext();
@@ -70,6 +75,15 @@ export default function SettingsScreen() {
     strip_layout: 'vertical-3' as 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2',
     print_mode: 'dual-strip' as 'single' | 'dual-strip',
     photo_spacing: 20,
+    auto_print: false,
+    print_copies: 2,
+    camera_width: 1280,
+    camera_height: 720,
+    paper_size: '4x6' as '4x6' | '5x7',
+  });
+  const [uiPreferences, setUiPreferences] = useState({
+    mirror_preview: mirrorPreview,
+    kiosk_mode: kioskMode,
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -113,6 +127,19 @@ export default function SettingsScreen() {
           strip_layout: (settings.strip_layout || 'vertical-3') as any,
           print_mode: (settings.print_mode || 'dual-strip') as any,
           photo_spacing: settings.photo_spacing || 20,
+          auto_print: settings.auto_print ?? false,
+          print_copies: settings.print_copies ?? 2,
+          camera_width: settings.camera_width ?? 1280,
+          camera_height: settings.camera_height ?? 720,
+          paper_size: (settings.paper_size || '4x6') as any,
+        });
+        setUiPreferences({
+          mirror_preview: settings.mirror_preview ?? uiPreferences.mirror_preview,
+          kiosk_mode: settings.kiosk_mode ?? uiPreferences.kiosk_mode,
+        });
+        setSettings({
+          mirrorPreview: settings.mirror_preview ?? mirrorPreview,
+          kioskMode: settings.kiosk_mode ?? kioskMode,
         });
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -122,6 +149,21 @@ export default function SettingsScreen() {
 
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(UI_PREF_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<typeof uiPreferences>;
+        const mirrorPref = parsed.mirror_preview ?? mirrorPreview;
+        const kioskPref = parsed.kiosk_mode ?? kioskMode;
+        setUiPreferences({ mirror_preview: mirrorPref, kiosk_mode: kioskPref });
+        setSettings({ mirrorPreview: mirrorPref, kioskMode: kioskPref });
+      }
+    } catch (error) {
+      console.error('No se pudieron cargar preferencias locales', error);
+    }
+  }, [mirrorPreview, kioskMode, setSettings]);
 
   // Auto-save printer when changed
   useEffect(() => {
@@ -141,6 +183,14 @@ export default function SettingsScreen() {
       savePrinter();
     }
   }, [selectedPrinter]);
+
+  useEffect(() => {
+    setSettings({
+      mirrorPreview: uiPreferences.mirror_preview,
+      kioskMode: uiPreferences.kiosk_mode,
+    });
+    localStorage.setItem(UI_PREF_STORAGE_KEY, JSON.stringify(uiPreferences));
+  }, [uiPreferences, setSettings]);
 
   const loadPrinters = async () => {
     setIsLoadingPrinters(true);
@@ -166,6 +216,7 @@ export default function SettingsScreen() {
     setIsTesting(true);
     try {
       toast.info('Enviando test de impresión...');
+      await photoboothAPI.print.test(selectedPrinter);
       toast.success('Test enviado a ' + selectedPrinter);
     } catch (error) {
       console.error('Error testing printer:', error);
@@ -180,8 +231,16 @@ export default function SettingsScreen() {
     setSaveMessage(null);
 
     try {
-      const updatedSettings = await photoboothAPI.settings.update(formData);
+      const updatedSettings = await photoboothAPI.settings.update({
+        ...formData,
+        mirror_preview: uiPreferences.mirror_preview,
+        kiosk_mode: uiPreferences.kiosk_mode,
+      });
       loadSettings(updatedSettings);
+      setUiPreferences({
+        mirror_preview: updatedSettings.mirror_preview ?? uiPreferences.mirror_preview,
+        kiosk_mode: updatedSettings.kiosk_mode ?? uiPreferences.kiosk_mode,
+      });
       setSaveMessage({ type: 'success', text: '✅ Configuración guardada' });
 
       setTimeout(() => setSaveMessage(null), 3000);
@@ -211,6 +270,15 @@ export default function SettingsScreen() {
         strip_layout: (defaultSettings.strip_layout || 'vertical-3') as any,
         print_mode: (defaultSettings.print_mode || 'dual-strip') as any,
         photo_spacing: defaultSettings.photo_spacing || 20,
+        auto_print: defaultSettings.auto_print ?? false,
+        print_copies: defaultSettings.print_copies ?? 2,
+        camera_width: defaultSettings.camera_width ?? 1280,
+        camera_height: defaultSettings.camera_height ?? 720,
+        paper_size: (defaultSettings.paper_size || '4x6') as any,
+      });
+      setUiPreferences({
+        mirror_preview: defaultSettings.mirror_preview ?? false,
+        kiosk_mode: defaultSettings.kiosk_mode ?? true,
       });
       setSaveMessage({ type: 'success', text: '✅ Configuración restaurada' });
       setShowResetDialog(false);
@@ -272,7 +340,7 @@ export default function SettingsScreen() {
             </TabsTrigger>
             <TabsTrigger value="templates" className="gap-2">
               <Palette className="w-4 h-4" />
-              Templates
+              Diseños
             </TabsTrigger>
             <TabsTrigger value="general" className="gap-2">
               <Settings2 className="w-4 h-4" />
@@ -371,6 +439,81 @@ export default function SettingsScreen() {
               </CardContent>
             </Card>
             </div>
+
+            {/* Pantalla y modo espejo */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Pantalla y experiencia</CardTitle>
+                <CardDescription>Kiosko por defecto y espejo para el preview</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="kiosk-mode" className="text-base font-medium">
+                    Modo kiosko al iniciar
+                  </Label>
+                  <Switch
+                    id="kiosk-mode"
+                    checked={uiPreferences.kiosk_mode}
+                    onCheckedChange={(checked) =>
+                      setUiPreferences((prev) => ({ ...prev, kiosk_mode: checked }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="mirror-preview" className="text-base font-medium">
+                    Espejo del preview (flip horizontal)
+                  </Label>
+                  <Switch
+                    id="mirror-preview"
+                    checked={uiPreferences.mirror_preview}
+                    onCheckedChange={(checked) =>
+                      setUiPreferences((prev) => ({ ...prev, mirror_preview: checked }))
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cámara */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Resolución de cámara</CardTitle>
+                <CardDescription>Define ancho/alto del frame de captura</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Ancho (px)</Label>
+                    <Input
+                      type="number"
+                      min={640}
+                      max={1920}
+                      step={10}
+                      value={formData.camera_width}
+                      onChange={(e) =>
+                        setFormData({ ...formData, camera_width: Number(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Alto (px)</Label>
+                    <Input
+                      type="number"
+                      min={480}
+                      max={1080}
+                      step={10}
+                      value={formData.camera_height}
+                      onChange={(e) =>
+                        setFormData({ ...formData, camera_height: Number(e.target.value) })
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Usa valores moderados (ej. 1280x720) para mantener bajo consumo y velocidad de composición.
+                </p>
+              </CardContent>
+            </Card>
 
             {/* Audio Toggle */}
             <Card>
@@ -485,7 +628,11 @@ export default function SettingsScreen() {
 
             {/* Layout Configuration */}
             <div className="space-y-6">
-              <h3 className="text-xl font-bold text-foreground">Layout de Impresión</h3>
+              <h3 className="text-xl font-bold text-foreground">Diseño de tiras</h3>
+              <p className="text-sm text-gray-400">
+                Normalmente personalizarás el look de las tiras desde la pestaña <strong>Diseños</strong>.
+                Estos ajustes sirven como base o cuando no hay un Template activo.
+              </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Tipo de Layout */}
@@ -567,6 +714,86 @@ export default function SettingsScreen() {
           </TabsContent>
           {/* TAB: PRINTING */}
           <TabsContent value="printing" className={TAB_PANEL_CLASS}>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Auto impresión</CardTitle>
+                <CardDescription>Copias por defecto y envío automático al terminar</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="auto-print" className="text-base font-medium">
+                    Enviar a imprimir automáticamente
+                  </Label>
+                  <Switch
+                    id="auto-print"
+                    checked={formData.auto_print}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, auto_print: checked })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Copias</Label>
+                    <span className="text-xl font-bold text-primary">{formData.print_copies}</span>
+                  </div>
+                  <Slider
+                    value={[formData.print_copies]}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, print_copies: value[0] })
+                    }
+                    min={1}
+                    max={6}
+                    step={1}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Modo de impresión</CardTitle>
+                <CardDescription>Selecciona si imprimes 1 tira o duplicada (2 tiras en 4x6)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Modo</Label>
+                    <Select
+                      value={formData.print_mode}
+                      onValueChange={(value: 'single' | 'dual-strip') => setFormData({ ...formData, print_mode: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">Una tira (strip)</SelectItem>
+                        <SelectItem value="dual-strip">Dos tiras en una hoja (full_strip)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Papel</Label>
+                    <Select
+                      value={(formData as any).paper_size || '4x6'}
+                      onValueChange={(value: '4x6' | '5x7') => setFormData({ ...formData, paper_size: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="4x6">4x6 pulgadas</SelectItem>
+                        <SelectItem value="5x7">5x7 pulgadas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  “Dos tiras” usa la imagen full_strip con línea de corte al centro; “Una tira” imprime el strip simple.
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Printer Selection */}
             {isLoadingPrinters ? (
               <div className="text-center py-12">

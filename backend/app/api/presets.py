@@ -129,6 +129,7 @@ def apply_preset_to_settings(preset: EventPreset) -> None:
     settings.voice_volume = preset.voice_volume
     settings.active_design_id = preset.design_id
     settings.active_template_id = preset.template_id
+    settings.photo_filter = preset.photo_filter
     
     save_settings(settings)
 
@@ -207,6 +208,7 @@ async def create_preset(preset_data: PresetCreate):
         voice_rate=preset_data.voice_rate,
         voice_pitch=preset_data.voice_pitch,
         voice_volume=preset_data.voice_volume,
+        photo_filter=preset_data.photo_filter or "none",
         design_id=preset_data.design_id,
         design_name=design_name,
         design_path=design_path,

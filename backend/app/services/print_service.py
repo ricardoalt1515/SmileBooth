@@ -12,6 +12,7 @@ import subprocess
 import os
 
 from app.config import DATA_DIR
+from app.api.settings import load_settings
 
 PRINT_SIMULATION = os.getenv("PRINT_SIMULATION", "0") == "1"
 
@@ -209,12 +210,15 @@ class PrintService:
             raise FileNotFoundError(f"Imagen no encontrada: {image_path}")
         
         system = platform.system()
-        
+        settings = load_settings()
+        media_option = "Custom.4x6in" if settings.paper_size == "4x6" else "Custom.5x7in"
+        media_size = (1016, 1524) if settings.paper_size == "4x6" else (1270, 1778)  # tenths of millimeters
+
         try:
             if system == "Darwin":  # macOS
-                return PrintService._print_macos(image_path, printer_name, copies)
+                return PrintService._print_macos(image_path, printer_name, copies, media_option)
             elif system == "Windows":
-                return PrintService._print_windows(image_path, printer_name, copies)
+                return PrintService._print_windows(image_path, printer_name, copies, media_size)
             else:
                 print(f"Sistema no soportado: {system}")
                 return False
@@ -226,7 +230,8 @@ class PrintService:
     def _print_macos(
         image_path: Path,
         printer_name: Optional[str],
-        copies: int
+        copies: int,
+        media_option: str,
     ) -> bool:
         """
         Imprime en macOS usando lp o lpr.
@@ -245,7 +250,7 @@ class PrintService:
             
             # Opciones de impresión para calidad
             cmd.extend([
-                '-o', 'media=Custom.4x6in',  # Tamaño 4x6"
+                '-o', f'media={media_option}',
                 '-o', 'fit-to-page',
                 '-o', 'print-quality=5',  # Máxima calidad
             ])
@@ -276,7 +281,8 @@ class PrintService:
     def _print_windows(
         image_path: Path,
         printer_name: Optional[str],
-        copies: int
+        copies: int,
+        media_size: tuple[int, int],
     ) -> bool:
         """
         Imprime en Windows usando win32print.
@@ -297,6 +303,15 @@ class PrintService:
                 # Crear contexto de dispositivo
                 hdc = win32ui.CreateDC()
                 hdc.CreatePrinterDC(printer_name)
+
+                # Ajustar tamaño de papel en DEVMODE si es posible
+                try:
+                    devmode = hdc.GetDevMode()
+                    # dmPaperWidth y dmPaperLength están en décimas de mm
+                    devmode.PaperWidth, devmode.PaperLength = media_size
+                    hdc.ResetDC(devmode)
+                except Exception as e:
+                    print(f"No se pudo ajustar tamaño de papel: {e}")
                 
                 # Cargar imagen
                 img = Image.open(image_path)

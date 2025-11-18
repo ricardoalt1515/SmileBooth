@@ -65,6 +65,16 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
   const getTemplateLayoutLabel = (layout?: string | null) =>
     layout ? LAYOUT_LABELS[layout as keyof typeof LAYOUT_LABELS] ?? null : null;
 
+  const getFilterLabel = (filter?: EventPreset['photo_filter']): string | null => {
+    if (!filter || filter === 'none') return null;
+    const map: Record<string, string> = {
+      bw: 'Blanco y negro',
+      sepia: 'Sepia',
+      glam: 'Glam (B&N)',
+    };
+    return map[filter] || null;
+  };
+
   // Cargar presets al montar
   const loadPresets = useCallback(async () => {
     try {
@@ -230,6 +240,11 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
                         {getTemplateLayoutLabel(activePreset.template_layout)}
                       </div>
                     )}
+                    {getFilterLabel(activePreset.photo_filter) && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {getFilterLabel(activePreset.photo_filter)}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -328,6 +343,11 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
                           <div className="text-muted-foreground truncate">
                             {getTemplateLayoutLabel(preset.template_layout) || 'template'}
                           </div>
+                          {getFilterLabel(preset.photo_filter) && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              {getFilterLabel(preset.photo_filter)}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <>

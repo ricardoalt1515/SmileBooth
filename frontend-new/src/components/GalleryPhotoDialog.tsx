@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Printer, Share2, Trash2, ChevronLeft, ChevronRight, X, Image } from 'lucide-react';
+import { Download, Printer, Share2, Trash2, ChevronLeft, ChevronRight, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -87,22 +87,12 @@ export default function GalleryPhotoDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl glass border-white/10 text-white p-0" showCloseButton={false}>
+        <DialogContent className="max-w-5xl glass border-white/10 text-white p-0" showCloseButton={true}>
           {/* Header */}
           <DialogHeader className="p-6 pb-0">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-2xl">
-                Foto {currentIndex + 1} de {allPhotos.length}
-              </DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                className="text-white hover:bg-white/10"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
+            <DialogTitle className="text-2xl">
+              Foto {currentIndex + 1} de {allPhotos.length}
+            </DialogTitle>
             <DialogDescription className="sr-only">
               Vista detallada de la foto de la galería. Usa las flechas para navegar entre fotos.
             </DialogDescription>

@@ -15,6 +15,9 @@ interface OperationalHUDProps {
   cameraDetails?: string;
   printerDetails?: string;
   backendDetails?: string;
+  lastPrintJobError?: string | null;
+  lastPrintJobId?: string | null;
+  failedPrintJobs?: number;
   onStatusClick?: (device: 'camera' | 'printer' | 'backend') => void;
 }
 
@@ -25,6 +28,8 @@ export default function OperationalHUD({
   cameraDetails,
   printerDetails,
   backendDetails,
+  lastPrintJobError,
+  failedPrintJobs = 0,
   onStatusClick,
 }: OperationalHUDProps) {
   const getStatusColor = (status: DeviceStatus) => {
@@ -102,6 +107,12 @@ export default function OperationalHUD({
             <div className="text-xs">
               <p className="font-bold mb-1">Impresora: {getStatusText(printerStatus)}</p>
               {printerDetails && <p className="text-gray-400">{printerDetails}</p>}
+              {lastPrintJobError && (
+                <p className="text-red-400 mt-1">Último error: {lastPrintJobError}</p>
+              )}
+              {failedPrintJobs > 0 && (
+                <p className="text-amber-300 mt-1">Pendientes por reintentar: {failedPrintJobs}</p>
+              )}
             </div>
           </TooltipContent>
         </Tooltip>

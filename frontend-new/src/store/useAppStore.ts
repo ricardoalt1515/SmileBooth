@@ -2,7 +2,26 @@ import { create } from 'zustand';
 import type { CapturedImage } from '../types';
 
 type Screen = 'start' | 'countdown' | 'capture' | 'processing' | 'success' | 'settings' | 'gallery';
+type LogLevel = 'info' | 'warning' | 'error';
 
+export interface AppLog {
+  id: string;
+  level: LogLevel;
+  message: string;
+  source?: string;
+  timestamp: number;
+}
+
+export interface PrintJob {
+  job_id: string;
+  file_path: string;
+  printer_name: string | null;
+  copies: number;
+  status: string;
+  error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
 interface AppState {
   // Current screen
   currentScreen: Screen;
@@ -46,6 +65,15 @@ interface AppState {
   voicePitch: number;
   voiceVolume: number;
   autoResetSeconds: number;
+  photoFilter: string;
+  mirrorPreview: boolean;
+  kioskMode: boolean;
+  autoPrint: boolean;
+  printCopies: number;
+  cameraWidth: number;
+  cameraHeight: number;
+  printMode: 'single' | 'dual-strip';
+  paperSize: '4x6' | '5x7';
   loadSettings: (settings: {
     photos_to_take?: number;
     countdown_seconds?: number;
@@ -54,12 +82,41 @@ interface AppState {
     voice_pitch?: number;
     voice_volume?: number;
     auto_reset_seconds?: number;
+    mirror_preview?: boolean;
+    kiosk_mode?: boolean;
+    auto_print?: boolean;
+    print_copies?: number;
+    camera_width?: number;
+    camera_height?: number;
+    print_mode?: 'single' | 'dual-strip';
+    paper_size?: '4x6' | '5x7';
   }) => void;
-  setSettings: (settings: Partial<Pick<AppState, 'countdownSeconds' | 'photosToTake' | 'audioEnabled' | 'voiceRate' | 'voicePitch' | 'voiceVolume' | 'autoResetSeconds'>>) => void;
+  setSettings: (settings: Partial<Pick<AppState,
+    'countdownSeconds' |
+    'photosToTake' |
+    'audioEnabled' |
+    'voiceRate' |
+    'voicePitch' |
+    'voiceVolume' |
+    'autoResetSeconds' |
+    'mirrorPreview' |
+    'kioskMode' |
+    'autoPrint' |
+    'printCopies' |
+    'cameraWidth' |
+    'cameraHeight' |
+    'printMode' |
+    'paperSize'
+  >>) => void;
 
   // Backend connection
   isBackendConnected: boolean;
   setBackendConnected: (connected: boolean) => void;
+
+  // Operational logs for staff
+  logs: AppLog[];
+  addLog: (entry: Omit<AppLog, 'id' | 'timestamp'> & { timestamp?: number }) => void;
+  clearLogs: () => void;
 
   // Reset
   reset: () => void;
@@ -82,8 +139,20 @@ const initialState = {
   voicePitch: 1.0,
   voiceVolume: 1.0,
   autoResetSeconds: 30,
+  photoFilter: 'none',
+  mirrorPreview: false,
+  kioskMode: true,
+  autoPrint: false,
+  printCopies: 2,
+  cameraWidth: 1280,
+  cameraHeight: 720,
+  printMode: 'dual-strip' as const,
+  paperSize: '4x6' as const,
   isBackendConnected: false,
+  logs: [] as AppLog[],
 };
+
+const MAX_LOGS = 50;
 
 export const useAppStore = create<AppState>((set) => ({
   ...initialState,
@@ -128,11 +197,34 @@ export const useAppStore = create<AppState>((set) => ({
     voicePitch: settings.voice_pitch ?? initialState.voicePitch,
     voiceVolume: settings.voice_volume ?? initialState.voiceVolume,
     autoResetSeconds: settings.auto_reset_seconds ?? initialState.autoResetSeconds,
+    photoFilter: (settings as any).photo_filter ?? initialState.photoFilter,
+    mirrorPreview: settings.mirror_preview ?? initialState.mirrorPreview,
+    kioskMode: settings.kiosk_mode ?? initialState.kioskMode,
+    autoPrint: settings.auto_print ?? initialState.autoPrint,
+    printCopies: settings.print_copies ?? initialState.printCopies,
+    cameraWidth: settings.camera_width ?? initialState.cameraWidth,
+    cameraHeight: settings.camera_height ?? initialState.cameraHeight,
+    printMode: settings.print_mode ?? initialState.printMode,
+    paperSize: settings.paper_size ?? initialState.paperSize,
   }),
 
   setSettings: (settings) => set(settings),
 
   setBackendConnected: (connected) => set({ isBackendConnected: connected }),
+
+  addLog: (entry) => set((state) => {
+    const timestamp = entry.timestamp ?? Date.now();
+    const newEntry: AppLog = {
+      id: `${timestamp}-${state.logs.length}`,
+      timestamp,
+      ...entry,
+    };
+
+    const boundedLogs = [newEntry, ...state.logs].slice(0, MAX_LOGS);
+    return { logs: boundedLogs };
+  }),
+
+  clearLogs: () => set({ logs: [] }),
 
   reset: () => set({
     ...initialState,

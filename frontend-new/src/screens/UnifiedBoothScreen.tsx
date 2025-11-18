@@ -14,11 +14,21 @@ import { EventPreset, EVENT_TYPE_LABELS } from '../types/preset';
 import { LAYOUT_LABELS, getLayoutPhotoCount, LAYOUT_3X1_VERTICAL } from '../types/template';
 import { Calendar } from 'lucide-react';
 import Confetti from '../components/Confetti';
+import StaffLogPanel from '../components/StaffLogPanel';
 
 type BoothState = 'idle' | 'countdown' | 'capturing' | 'pausing' | 'reviewing' | 'preview-final' | 'processing' | 'success';
 
 const getTemplateLayoutLabel = (layout?: string | null) =>
   layout ? LAYOUT_LABELS[layout as keyof typeof LAYOUT_LABELS] ?? null : null;
+
+const PANIC_EXIT_THRESHOLD = 3;
+const PANIC_EXIT_WINDOW_MS = 2000;
+const COUNTDOWN_BEEP_FREQUENCY = 650;
+const GO_BEEP_FREQUENCY = 1200;
+const COUNTDOWN_BEEP_DURATION_MS = 150;
+const GO_BEEP_DURATION_MS = 200;
+const PAUSE_BETWEEN_SHOTS_SECONDS = 2;
+const SUCCESS_AUTO_RESET_SECONDS = 30;
 
 export default function UnifiedBoothScreen() {
   const {
@@ -34,14 +44,18 @@ export default function UnifiedBoothScreen() {
     setCurrentScreen,
     setError,
     reset,
+    mirrorPreview,
+    kioskMode,
+    addLog,
   } = useAppStore();
 
   const webcamRef = useRef<Webcam>(null);
+  const escapeTimestampsRef = useRef<number[]>([]);
   const [boothState, setBoothState] = useState<BoothState>('idle');
-  const [countdown, setCountdown] = useState(5);
-  const [pauseCountdown, setPauseCountdown] = useState(2);
+  const [countdown, setCountdown] = useState(countdownSeconds || 5);
+  const [pauseCountdown, setPauseCountdown] = useState(PAUSE_BETWEEN_SHOTS_SECONDS);
   const [photoSlots, setPhotoSlots] = useState<string[]>([]);
-  const [autoResetTimer, setAutoResetTimer] = useState(30);
+  const [autoResetTimer, setAutoResetTimer] = useState(SUCCESS_AUTO_RESET_SECONDS);
   const [showFlash, setShowFlash] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
@@ -123,9 +137,13 @@ export default function UnifiedBoothScreen() {
       });
 
       incrementPhotoIndex();
+      addLog({ level: 'info', source: 'camera', message: `Foto ${currentPhotoIndex + 1} capturada` });
+
+      const nextPhotoIndex = currentPhotoIndex + 1;
+      const remainingPhotos = effectivePhotosToTake - nextPhotoIndex;
 
       // Si es la última foto, ir a REVIEW (carousel)
-      if (currentPhotoIndex === effectivePhotosToTake - 1) {
+      if (nextPhotoIndex >= effectivePhotosToTake) {
         playSuccess();
         speak('¡Perfecto! Mira tus fotos.', { rate: 1.0, pitch: 1.1 });
         setTimeout(() => {
@@ -134,9 +152,13 @@ export default function UnifiedBoothScreen() {
           setReviewProgress(0);
         }, 1000);
       } else {
-        speak('Bien. Siguiente foto.', { rate: 1.0, pitch: 1.0 });
+        if (remainingPhotos === 1) {
+          speak('Falta una foto. Última toma.', { rate: 1.0, pitch: 1.0 });
+        } else {
+          speak('Bien. Siguiente foto.', { rate: 1.0, pitch: 1.0 });
+        }
         setBoothState('pausing');
-        setPauseCountdown(2);
+        setPauseCountdown(PAUSE_BETWEEN_SHOTS_SECONDS);
       }
 
     } catch (error) {
@@ -145,23 +167,27 @@ export default function UnifiedBoothScreen() {
       setError(message);
       setErrorMessage(message);
       speak('Error al capturar. Intenta de nuevo.', { rate: 1.0, pitch: 1.0 });
+      addLog({ level: 'error', source: 'camera', message });
       setBoothState('idle');
     } finally {
       setIsCapturingPhoto(false);
     }
-  }, [currentPhotoIndex, effectivePhotosToTake, sessionId, addCapturedImage, addPhotoPath, setSessionId, incrementPhotoIndex, setCurrentScreen, setError, playShutter, playSuccess, speak]);
+  }, [currentPhotoIndex, effectivePhotosToTake, sessionId, addCapturedImage, addPhotoPath, setSessionId, incrementPhotoIndex, setCurrentScreen, setError, playShutter, playSuccess, speak, addLog]);
 
   // Countdown principal (5-4-3-2-1)
   useEffect(() => {
     if (boothState !== 'countdown') return;
 
     if (countdown === 0) {
+      playBeep(GO_BEEP_FREQUENCY, GO_BEEP_DURATION_MS);
       capturePhoto();
       return;
     }
 
     const timer = setTimeout(() => {
-      playBeep(countdown === 1 ? 900 : 600, 150);
+      const tone = countdown === 1 ? GO_BEEP_FREQUENCY : COUNTDOWN_BEEP_FREQUENCY;
+      const duration = countdown === 1 ? GO_BEEP_DURATION_MS : COUNTDOWN_BEEP_DURATION_MS;
+      playBeep(tone, duration);
       speak(countdown.toString(), { rate: 1.0, pitch: 1.0 });
       setCountdown(countdown - 1);
     }, 1000);
@@ -175,7 +201,7 @@ export default function UnifiedBoothScreen() {
 
     if (pauseCountdown === 0) {
       setBoothState('countdown');
-      setCountdown(5);
+      setCountdown(countdownSeconds || 5);
       return;
     }
 
@@ -185,6 +211,28 @@ export default function UnifiedBoothScreen() {
 
     return () => clearTimeout(timer);
   }, [boothState, pauseCountdown]);
+
+  // Iniciar sesión
+  const handleStart = useCallback(() => {
+    if (boothState !== 'idle') return;
+    
+    speak('Prepárate. Primera foto en cinco segundos.', { rate: 1.0, pitch: 1.0 });
+    addLog({ level: 'info', source: 'session', message: 'Sesión iniciada' });
+    setBoothState('countdown');
+    setCountdown(countdownSeconds || 5);
+  }, [boothState, speak, addLog, countdownSeconds]);
+
+  // Reset
+  const handleReset = useCallback(() => {
+    reset();
+    addLog({ level: 'warning', source: 'session', message: 'Sesión reiniciada' });
+    setBoothState('idle');
+    setPhotoSlots([]);
+    setCountdown(countdownSeconds || 5);
+    setPauseCountdown(PAUSE_BETWEEN_SHOTS_SECONDS);
+    setAutoResetTimer(SUCCESS_AUTO_RESET_SECONDS);
+    setShowFlash(false);
+  }, [reset, addLog, countdownSeconds]);
 
   // Auto-reset en success (30 segundos)
   useEffect(() => {
@@ -200,27 +248,7 @@ export default function UnifiedBoothScreen() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [boothState, autoResetTimer]);
-
-  // Iniciar sesión
-  const handleStart = () => {
-    if (boothState !== 'idle') return;
-    
-    speak('Prepárate. Primera foto en cinco segundos.', { rate: 1.0, pitch: 1.0 });
-    setBoothState('countdown');
-    setCountdown(5);
-  };
-
-  // Reset
-  const handleReset = () => {
-    reset();
-    setBoothState('idle');
-    setPhotoSlots([]);
-    setCountdown(5);
-    setPauseCountdown(2);
-    setAutoResetTimer(30);
-    setShowFlash(false);
-  };
+  }, [boothState, autoResetTimer, handleReset]);
 
   // Tecla SPACE para iniciar + flechas para carousel
   useEffect(() => {
@@ -229,9 +257,29 @@ export default function UnifiedBoothScreen() {
         e.preventDefault();
         handleStart();
       }
-      if (e.code === 'Escape' && boothState !== 'idle') {
-        e.preventDefault();
-        handleReset();
+      if (e.code === 'Escape') {
+        const now = Date.now();
+        escapeTimestampsRef.current = [
+          ...escapeTimestampsRef.current.filter((ts) => now - ts <= PANIC_EXIT_WINDOW_MS),
+          now,
+        ];
+
+        const isPanic = escapeTimestampsRef.current.length >= PANIC_EXIT_THRESHOLD;
+
+        if (isPanic) {
+          escapeTimestampsRef.current = [];
+          if (window.electronAPI?.exitKiosk) {
+            void window.electronAPI.exitKiosk();
+          }
+          addLog({ level: 'warning', source: 'kiosk', message: 'Panic exit activado' });
+          handleReset();
+          return;
+        }
+
+        if (boothState !== 'idle') {
+          e.preventDefault();
+          handleReset();
+        }
       }
       // Navegación en carousel
       if (boothState === 'reviewing') {
@@ -250,7 +298,7 @@ export default function UnifiedBoothScreen() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [boothState, reviewIndex, effectivePhotosToTake]);
+  }, [boothState, reviewIndex, effectivePhotosToTake, addLog, handleReset, handleStart]);
 
   // Carousel auto-advance
   useEffect(() => {
@@ -321,6 +369,7 @@ export default function UnifiedBoothScreen() {
         design_position: activeTemplate?.design_position,
         background_color: activeTemplate?.background_color,
         photo_spacing: activeTemplate?.photo_spacing,
+        photo_filter: activeEvent?.photo_filter || 'none',
       });
 
       console.log('✅ Preview generado:', previewUrl);
@@ -393,6 +442,14 @@ export default function UnifiedBoothScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // Sincronizar preferencia de kiosk con el proceso principal
+  useEffect(() => {
+    if (!window.electronAPI?.setKioskMode) return;
+    void window.electronAPI.setKioskMode(kioskMode).catch(() => {
+      addLog({ level: 'warning', source: 'kiosk', message: 'No se pudo aplicar modo kiosk' });
+    });
+  }, [kioskMode, addLog]);
+
   // Handlers para StaffDock
   const handleOpenSettings = () => {
     setCurrentScreen('settings');
@@ -414,22 +471,27 @@ export default function UnifiedBoothScreen() {
 
   return (
     <div className="flex h-screen w-screen bg-black">
-      {/* Operational HUD - Status de dispositivos */}
-      <OperationalHUD
-        cameraStatus={deviceStatus.cameraStatus}
-        printerStatus={deviceStatus.printerStatus}
-        backendStatus={deviceStatus.backendStatus}
-        cameraDetails={deviceStatus.cameraDetails}
-        printerDetails={deviceStatus.printerDetails}
-        backendDetails={deviceStatus.backendDetails}
-        onStatusClick={(device) => {
-          console.log(`Status clicked: ${device}`);
-          deviceStatus.refresh();
-        }}
-      />
+      {/* Operational HUD - Status de dispositivos (solo en modo staff) */}
+      {!kioskMode && (
+        <OperationalHUD
+          cameraStatus={deviceStatus.cameraStatus}
+          printerStatus={deviceStatus.printerStatus}
+          backendStatus={deviceStatus.backendStatus}
+          cameraDetails={deviceStatus.cameraDetails}
+          printerDetails={deviceStatus.printerDetails}
+          backendDetails={deviceStatus.backendDetails}
+          lastPrintJobError={deviceStatus.lastPrintJobError}
+          lastPrintJobId={deviceStatus.lastPrintJobId}
+          failedPrintJobs={deviceStatus.failedPrintJobs}
+          onStatusClick={(device) => {
+            console.log(`Status clicked: ${device}`);
+            deviceStatus.refresh();
+          }}
+        />
+      )}
 
-      {/* Event Indicator - Enhanced with glassmorphism */}
-      {activeEvent && (
+      {/* Event Indicator - Enhanced with glassmorphism (solo en modo staff) */}
+      {!kioskMode && activeEvent && (
         <div className="fixed top-20 left-4 z-40 glass rounded-xl max-w-xs animate-slide-in-blur">
           {/* Gradient accent border */}
           <div
@@ -593,9 +655,11 @@ export default function UnifiedBoothScreen() {
                 facingMode: 'user',
               }}
               className="w-full h-full object-cover"
+              style={{ transform: mirrorPreview ? 'scaleX(-1)' : 'none' }}
               onUserMediaError={(error) => {
                 console.error('❌ Camera error:', error);
                 const errorMsg = error instanceof Error ? error.message : String(error);
+                addLog({ level: 'error', source: 'camera', message: errorMsg });
 
                 if (errorMsg.includes('Permission denied') || errorMsg.includes('NotAllowedError')) {
                   setCameraError('Acceso a la cámara denegado. Por favor permite el acceso en la configuración de tu navegador.');
@@ -949,14 +1013,24 @@ export default function UnifiedBoothScreen() {
           )}
         </div>
 
-        {/* Staff Dock - Menú lateral */}
-        <StaffDock
-          onOpenSettings={handleOpenSettings}
-          onOpenGallery={handleOpenGallery}
-          onOpenDesigns={handleOpenDesigns}
-          onOpenChecklist={handleOpenChecklist}
-          galleryPhotoCount={galleryPhotoCount}
-        />
+        {/* Staff Dock - Menú lateral (siempre visible, acceso discreto para staff) */}
+      <StaffDock
+        onOpenSettings={handleOpenSettings}
+        onOpenGallery={handleOpenGallery}
+        onOpenDesigns={handleOpenDesigns}
+        onOpenChecklist={handleOpenChecklist}
+        onRetryPrint={
+          deviceStatus.lastPrintJobId
+            ? () => photoboothAPI.print.retryJob(deviceStatus.lastPrintJobId)
+            : undefined
+        }
+        hasPrintError={Boolean(deviceStatus.lastPrintJobError)}
+        failedPrintJobs={deviceStatus.failedPrintJobs}
+        galleryPhotoCount={galleryPhotoCount}
+      />
+
+      {/* Staff Log Panel (solo en modo staff) */}
+      {!kioskMode && <StaffLogPanel />}
       </main>
 
       <HardwareChecklistDialog

@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.config import PHOTOS_DIR, TEMP_DIR, get_photo_url
+from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/api/gallery", tags=["gallery"])
 
@@ -21,6 +22,7 @@ class PhotoInfo(BaseModel):
     filename: str
     path: str
     url: str
+    thumbnail_url: str | None = None
     session_id: str
     timestamp: str
     size_bytes: int
@@ -38,6 +40,15 @@ class GalleryResponse(BaseModel):
     """Respuesta de la galería"""
     photos: List[PhotoInfo]
     stats: GalleryStats
+
+
+class SessionPhotos(BaseModel):
+    session_id: str
+    photos: List[PhotoInfo]
+    strip_url: str | None = None
+    full_strip_url: str | None = None
+    total_size_bytes: int
+    created_at: str | None = None
 
 
 @router.get("/photos", response_model=GalleryResponse)
@@ -67,9 +78,9 @@ async def get_all_photos():
                 if latest_session is None:
                     latest_session = session_id
                 
-                # Obtener todas las fotos de esta sesión
+                # Obtener todas las fotos de esta sesión (compatibilidad con nombres antiguos)
                 photo_files = sorted(
-                    session_dir.glob("photo_*.jpg"),
+                    list(session_dir.glob("shot-*.jpg")) + list(session_dir.glob("photo_*.jpg")),
                     key=lambda x: x.name
                 )
                 
@@ -80,11 +91,15 @@ async def get_all_photos():
                     # Crear URL usando función centralizada (DRY principle)
                     photo_url = get_photo_url(photo_file)
                     
+                    thumb_candidate = session_dir / f"thumb-{photo_file.stem.replace('shot-', '')}.jpg"
+                    thumb_url = get_photo_url(thumb_candidate) if thumb_candidate.exists() else None
+
                     photos.append(PhotoInfo(
                         id=photo_file.stem,
                         filename=photo_file.name,
                         path=str(photo_file),
                         url=photo_url,
+                        thumbnail_url=thumb_url,
                         session_id=session_id,
                         timestamp=datetime.fromtimestamp(stat.st_mtime).isoformat(),
                         size_bytes=stat.st_size
@@ -131,7 +146,7 @@ async def get_stats():
                 if latest_session is None:
                     latest_session = session_dir.name
                 
-                photo_files = list(session_dir.glob("photo_*.jpg"))
+                photo_files = list(session_dir.glob("shot-*.jpg")) + list(session_dir.glob("photo_*.jpg"))
                 total_photos += len(photo_files)
                 
                 for photo_file in photo_files:
@@ -148,6 +163,74 @@ async def get_stats():
         raise HTTPException(
             status_code=500,
             detail=f"Error al obtener estadísticas: {str(e)}"
+        )
+
+
+@router.get("/list", response_model=List[SessionPhotos])
+async def list_sessions():
+    """
+    Lista sesiones con sus fotos y strip/duplicado si existen.
+    """
+    try:
+        if not PHOTOS_DIR.exists():
+            return []
+
+        session_dirs = sorted(
+            [d for d in PHOTOS_DIR.iterdir() if d.is_dir()],
+            key=lambda x: x.name,
+            reverse=True,
+        )
+
+        sessions: List[SessionPhotos] = []
+
+        for session_dir in session_dirs:
+            session_id = session_dir.name
+            photos: List[PhotoInfo] = []
+            total_size = 0
+
+            photo_files = sorted(
+                list(session_dir.glob("shot-*.jpg")) + list(session_dir.glob("photo_*.jpg")),
+                key=lambda x: x.name,
+            )
+
+            for photo_file in photo_files:
+                stat = photo_file.stat()
+                total_size += stat.st_size
+                thumb_candidate = session_dir / f"thumb-{photo_file.stem.replace('shot-', '')}.jpg"
+                thumb_url = get_photo_url(thumb_candidate) if thumb_candidate.exists() else None
+                photos.append(
+                    PhotoInfo(
+                        id=photo_file.stem,
+                        filename=photo_file.name,
+                        path=str(photo_file),
+                        url=get_photo_url(photo_file),
+                        thumbnail_url=thumb_url,
+                        session_id=session_id,
+                        timestamp=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        size_bytes=stat.st_size,
+                    )
+                )
+
+            strip_path = session_dir / "strip.jpg"
+            full_strip_path = session_dir / "full_strip.jpg"
+
+            sessions.append(
+                SessionPhotos(
+                    session_id=session_id,
+                    photos=photos,
+                    strip_url=get_photo_url(strip_path) if strip_path.exists() else None,
+                    full_strip_url=get_photo_url(full_strip_path) if full_strip_path.exists() else None,
+                    total_size_bytes=total_size,
+                    created_at=SessionService.get_session(session_id).created_at if SessionService.get_session(session_id) else None,
+                )
+            )
+
+        return sessions
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al listar sesiones: {str(e)}",
         )
 
 
@@ -171,8 +254,7 @@ async def export_photos_zip():
                         session_name = session_dir.name
                         
                         # Agregar todas las fotos de esta sesión
-                        for photo_file in session_dir.glob("photo_*.jpg"):
-                            # Nombre dentro del ZIP: session_id/photo.jpg
+                        for photo_file in session_dir.glob("*.jpg"):
                             arcname = f"{session_name}/{photo_file.name}"
                             zipf.write(photo_file, arcname)
         
@@ -198,6 +280,39 @@ async def export_photos_zip():
             status_code=500,
             detail=f"Error al exportar ZIP: {str(e)}"
         )
+
+
+@router.post("/sessions/{session_id}/zip")
+async def export_session_zip(session_id: str):
+    """
+    Exporta una sesión específica a ZIP.
+    """
+    try:
+        session_dir = PHOTOS_DIR / session_id
+        if not session_dir.exists():
+            raise HTTPException(404, f"Sesión no encontrada: {session_id}")
+
+        zip_filename = f"session_{session_id}.zip"
+        zip_path = TEMP_DIR / zip_filename
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file in session_dir.glob("*.jpg"):
+                zipf.write(file, arcname=file.name)
+
+        if not zip_path.exists():
+            raise HTTPException(500, "Error al crear ZIP de sesión")
+
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename=zip_filename,
+            headers={"Content-Disposition": f"attachment; filename={zip_filename}"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al exportar sesión: {str(e)}")
 
 
 @router.delete("/sessions/{session_id}/photos/{filename}")

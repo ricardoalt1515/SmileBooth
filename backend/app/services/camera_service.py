@@ -13,6 +13,7 @@ from typing import Optional, Tuple
 from app.config import CAMERA_CONFIG, PHOTOS_DIR, get_photo_url
 from app.schemas.session import SessionPhoto
 from app.services.session_service import SessionService
+from app.api.settings import load_settings
 
 
 class CameraService:
@@ -30,6 +31,8 @@ class CameraService:
         """
         cap = None
         try:
+            settings = load_settings()
+
             # Abrir cámara
             cap = cv2.VideoCapture(camera_id)
             
@@ -37,8 +40,14 @@ class CameraService:
                 raise RuntimeError(f"No se puede abrir la cámara {camera_id}")
             
             # Configurar resolución (moderada para ahorrar RAM)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIG["width"])
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIG["height"])
+            cap.set(
+                cv2.CAP_PROP_FRAME_WIDTH,
+                settings.camera_width or CAMERA_CONFIG["width"],
+            )
+            cap.set(
+                cv2.CAP_PROP_FRAME_HEIGHT,
+                settings.camera_height or CAMERA_CONFIG["height"],
+            )
             cap.set(cv2.CAP_PROP_BUFFERSIZE, CAMERA_CONFIG["buffer_size"])
             
             # Descartar primeros frames (a veces salen oscuros)
@@ -55,8 +64,9 @@ class CameraService:
             if session_id is None:
                 session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             
-            timestamp = datetime.now().strftime("%H%M%S_%f")[:-3]  # Con milisegundos
-            filename = f"photo_{session_id}_{timestamp}.jpg"
+            current_session = SessionService.get_session(session_id)
+            photo_index = len(current_session.photos) + 1 if current_session else 1
+            filename = f"shot-{photo_index}.jpg"
             
             # Crear carpeta de sesión
             session_dir = PHOTOS_DIR / session_id
@@ -71,18 +81,29 @@ class CameraService:
                 frame,
                 [cv2.IMWRITE_JPEG_QUALITY, 90]  # Calidad 90 = buen balance
             )
+
+            # Crear thumbnail pequeño para galería
+            thumb_path = session_dir / f"thumb-{photo_index}.jpg"
+            thumb_width = 320
+            height, width = frame.shape[:2]
+            scale = thumb_width / width
+            thumb_height = int(height * scale)
+            thumbnail = cv2.resize(frame, (thumb_width, thumb_height))
+            cv2.imwrite(str(thumb_path), thumbnail, [cv2.IMWRITE_JPEG_QUALITY, 80])
             
             # Liberar frame de memoria
             del frame
             
             # Registrar metadata de sesión (fail fast si algo falla)
             photo_url = get_photo_url(filepath)
+            thumb_url = get_photo_url(thumb_path)
             SessionService.append_photo(
                 session_id,
                 SessionPhoto(
                     filename=filename,
                     path=photo_url,
                     url=photo_url,
+                    thumbnail_url=thumb_url,
                 ),
             )
 

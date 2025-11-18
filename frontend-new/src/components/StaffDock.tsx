@@ -1,20 +1,17 @@
 import { Settings, Image, Layout, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-
 interface StaffDockProps {
   onOpenSettings: () => void;
   onOpenGallery: () => void;
   onOpenDesigns: () => void;
   onOpenChecklist: () => void;
+  onRetryPrint?: () => void;
+  hasPrintError?: boolean;
   galleryPhotoCount?: number;
   className?: string;
+  failedPrintJobs?: number;
 }
 
 export default function StaffDock({
@@ -22,7 +19,10 @@ export default function StaffDock({
   onOpenGallery,
   onOpenDesigns,
   onOpenChecklist,
+  onRetryPrint,
+  hasPrintError = false,
   galleryPhotoCount = 0,
+  failedPrintJobs = 0,
   className = '',
 }: StaffDockProps) {
   return (
@@ -128,6 +128,39 @@ export default function StaffDock({
               <p className="text-xs text-gray-400">Estado del sistema</p>
             </TooltipContent>
           </Tooltip>
+
+          {/* Retry last print if error */}
+          {onRetryPrint && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={onRetryPrint}
+                  variant="ghost"
+                  size="icon"
+                  className={`w-14 h-14 rounded-xl hover:bg-white/10 hover:scale-110 transition-all duration-200 group ${
+                    hasPrintError ? 'ring-2 ring-red-500/80' : ''
+                  }`}
+                  aria-label="Reintentar impresión fallida"
+                >
+                  <Printer className={`w-7 h-7 ${hasPrintError ? 'text-red-400' : 'text-white'}`} />
+                  {failedPrintJobs > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-[10px] bg-red-500 border-2 border-black"
+                    >
+                      {failedPrintJobs > 9 ? '9+' : failedPrintJobs}
+                    </Badge>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="bg-black/95 border-white/20">
+                <p className="font-medium">Reintentar impresión</p>
+                <p className="text-xs text-gray-400">
+                  {failedPrintJobs > 0 ? 'Trabajos fallidos pendientes' : 'Sin fallos pendientes'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </TooltipProvider>

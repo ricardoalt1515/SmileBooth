@@ -4,6 +4,7 @@ API de Imágenes - Endpoints optimizados
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+import traceback
 from app.services.image_service import ImageService
 from app.schemas.image import ComposeStripRequest, ComposeStripResponse
 from app.config import DATA_DIR, TEMP_DIR
@@ -46,24 +47,43 @@ async def compose_strip(request: ComposeStripRequest):
                     status_code=404,
                     detail=f"Foto no encontrada: {photo_path}"
                 )
+            else:
+                print(f"✅ Foto encontrada: {photo_path}")
+        
+        if design_path:
+            print(f"🎨 Usando diseño: {design_path}")
         
         # Componer tira con metadatos del template
-        strip_path = ImageService.compose_strip(
-            photo_paths=photo_paths,
-            design_path=design_path,
-            session_id=request.session_id,
-            layout=request.layout,
-            design_position=request.design_position,
-            background_color=request.background_color,
-            photo_spacing=request.photo_spacing
-        )
+        try:
+            strip_path = ImageService.compose_strip(
+                photo_paths=photo_paths,
+                design_path=design_path,
+                session_id=request.session_id,
+                layout=request.layout,
+                design_position=request.design_position,
+                background_color=request.background_color,
+                photo_spacing=request.photo_spacing,
+                photo_filter=request.photo_filter,
+            )
+        except Exception as compose_err:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"compose_strip failed: {compose_err}")
         
-        # Crear versión duplicada (4x6" con 2 tiras)
-        full_page_path = ImageService.create_duplicate_strip(strip_path)
+        # Intentar crear página completa con 2 tiras solo si aplica el modo
+        full_page_path = None
+        if request.print_mode == "dual-strip":
+            try:
+                full_page_path = ImageService.create_duplicate_strip(strip_path)
+            except Exception as dup_err:
+                # No tumbar todo el flujo si falla solo el duplicado; loguear y seguir
+                print(f"⚠️ Error al crear full_strip: {dup_err}")
+                full_page_path = None
         
         # Convertir paths absolutos a relativos para el frontend
         strip_relative = "/" + str(Path(strip_path).relative_to(DATA_DIR.parent))
-        full_page_relative = "/" + str(Path(full_page_path).relative_to(DATA_DIR.parent))
+        full_page_relative = None
+        if full_page_path:
+            full_page_relative = "/" + str(Path(full_page_path).relative_to(DATA_DIR.parent))
         
         return ComposeStripResponse(
             success=True,
@@ -74,6 +94,7 @@ async def compose_strip(request: ComposeStripRequest):
     except HTTPException:
         raise
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Error al componer tira: {str(e)}"
@@ -133,7 +154,8 @@ async def preview_strip(request: ComposeStripRequest):
             layout=request.layout,
             design_position=request.design_position,
             background_color=request.background_color,
-            photo_spacing=request.photo_spacing
+            photo_spacing=request.photo_spacing,
+            photo_filter=request.photo_filter,
         )
         
         # Mover a temp

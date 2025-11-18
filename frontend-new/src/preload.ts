@@ -11,4 +11,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeOpenSettingsListener: (callback: () => void) => {
     ipcRenderer.removeListener('open-settings', callback);
   },
+  setKioskMode: (enable: boolean) => ipcRenderer.invoke('set-kiosk-mode', enable),
+  exitKiosk: () => ipcRenderer.invoke('exit-kiosk'),
 });

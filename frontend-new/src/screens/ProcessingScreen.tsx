@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import photoboothAPI from '../services/api';
 import { useAudio } from '../hooks/useAudio';
+import { useToastContext } from '../contexts/ToastContext';
 
 export default function ProcessingScreen() {
   const {
@@ -10,11 +11,16 @@ export default function ProcessingScreen() {
     setCurrentScreen,
     setIsLoading,
     setError,
+    autoPrint,
+    printCopies,
+    printMode,
   } = useAppStore();
 
   const { speak } = useAudio();
-  const { photoPaths, sessionId } = useAppStore();
+  const { photoPaths, sessionId, photoFilter } = useAppStore();
   const [progress, setProgress] = useState(0);
+  const toast = useToastContext();
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
     // Animate progress bar
@@ -60,12 +66,33 @@ export default function ProcessingScreen() {
           design_position: activeTemplate?.design_position,
           background_color: activeTemplate?.background_color,
           photo_spacing: activeTemplate?.photo_spacing,
+          photo_filter: photoFilter || 'none',
+          print_mode: printMode,
         });
 
         console.log('✅ Strip creado:', stripResponse);
 
         if (stripResponse.success) {
           setStripData(stripResponse.strip_path, stripResponse.full_page_path);
+
+          if (autoPrint) {
+            const targetPath =
+              printMode === 'dual-strip'
+                ? stripResponse.full_page_path || stripResponse.strip_path
+                : stripResponse.strip_path;
+            if (targetPath) {
+              try {
+                await photoboothAPI.print.queue({
+                  file_path: targetPath,
+                  copies: printCopies,
+                });
+                toast.success(`Enviando a impresora (${printCopies} copias)`);
+              } catch (err) {
+                console.error('❌ Error auto-imprimiendo:', err);
+                toast.error('No se pudo auto-imprimir, revisa la impresora');
+              }
+            }
+          }
         }
 
         // Complete progress bar
@@ -76,9 +103,26 @@ export default function ProcessingScreen() {
 
         // Move to success screen
         setCurrentScreen('success');
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error processing images:', error);
-        setError(error instanceof Error ? error.message : 'Error al procesar imágenes');
+
+        // Log detallado si viene de Axios
+        if (error?.response) {
+          console.error('📸 compose-strip status:', error.response.status);
+          console.error('📸 compose-strip data:', error.response.data);
+        }
+
+        let message = 'Error al procesar imágenes';
+        if (error?.response) {
+          const status = error.response.status;
+          const detail = (error.response.data && (error.response.data.detail || JSON.stringify(error.response.data))) || '';
+          message = detail || `Error compose-strip (status ${status})`;
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+
+        setError(message);
+        toast.error(message);
         speak('Error al procesar las fotos. Por favor intenta de nuevo.', { rate: 1.0 });
 
         setTimeout(() => {
@@ -90,10 +134,17 @@ export default function ProcessingScreen() {
       }
     };
 
+    // Guard: prevenir múltiples ejecuciones simultáneas
+    if (hasProcessedRef.current) return;
+    hasProcessedRef.current = true;
+
     processImages();
 
-    return () => clearInterval(progressInterval);
-  }, [capturedImages, photoPaths, sessionId, setStripData, setCurrentScreen, setIsLoading, setError, speak]);
+    return () => {
+      clearInterval(progressInterval);
+      hasProcessedRef.current = false;
+    };
+  }, [capturedImages, photoPaths, sessionId, setStripData, setCurrentScreen, setIsLoading, setError, speak, autoPrint, printCopies, photoFilter, printMode]);
 
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white relative overflow-hidden">

@@ -16,6 +16,7 @@ class SessionPhoto(BaseModel):
     filename: str
     path: str
     url: str
+    thumbnail_url: str | None = None
     captured_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 

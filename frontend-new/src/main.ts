@@ -2,6 +2,9 @@ import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
+const DEFAULT_WINDOW_WIDTH = 1920;
+const DEFAULT_WINDOW_HEIGHT = 1080;
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
@@ -9,7 +12,10 @@ if (started) {
 
 // Environment variables for production mode
 const isDevelopment = process.env.NODE_ENV === 'development' || MAIN_WINDOW_VITE_DEV_SERVER_URL;
-const isKioskMode = process.env.KIOSK_MODE === 'true';
+const kioskEnv = process.env.KIOSK_MODE;
+const isKioskMode = kioskEnv ? kioskEnv === 'true' : !isDevelopment;
+
+let mainWindow: BrowserWindow | null = null;
 
 // Single instance lock - prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
@@ -30,9 +36,9 @@ if (!gotTheLock) {
 
 const createWindow = () => {
   // Create the browser window with optimized settings
-  const mainWindow = new BrowserWindow({
-    width: isKioskMode ? undefined : 1920,
-    height: isKioskMode ? undefined : 1080,
+  mainWindow = new BrowserWindow({
+    width: isKioskMode ? undefined : DEFAULT_WINDOW_WIDTH,
+    height: isKioskMode ? undefined : DEFAULT_WINDOW_HEIGHT,
     fullscreen: isKioskMode,
     kiosk: isKioskMode,
     show: false, // Show when ready to avoid flickering
@@ -77,6 +83,7 @@ const createWindow = () => {
     if (global.gc) {
       global.gc();
     }
+    mainWindow = null;
   });
 
   // Register global hotkey for settings
@@ -94,6 +101,29 @@ const createWindow = () => {
 
   return mainWindow;
 };
+
+ipcMain.handle('set-kiosk-mode', (_event, enable: boolean) => {
+  if (!mainWindow) {
+    return false;
+  }
+  mainWindow.setKiosk(enable);
+  mainWindow.setFullScreen(enable);
+  if (!enable) {
+    mainWindow.show();
+  }
+  return true;
+});
+
+ipcMain.handle('exit-kiosk', () => {
+  if (!mainWindow) {
+    return false;
+  }
+  mainWindow.setKiosk(false);
+  mainWindow.setFullScreen(false);
+  mainWindow.show();
+  mainWindow.focus();
+  return true;
+});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

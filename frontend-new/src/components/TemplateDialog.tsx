@@ -52,6 +52,8 @@ const MIN_PHOTO_SPACING = 0;
 const MAX_PHOTO_SPACING = 100;
 const MAX_FILE_SIZE_MB = 10;
 const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
+const TARGET_RATIO = 4 / 3; // 600x450 en backend
+const RATIO_TOLERANCE = 0.1;
 
 interface TemplateDialogProps {
   open: boolean;
@@ -172,12 +174,35 @@ export default function TemplateDialog({
     return null;
   }, []);
 
+  const validateImageDimensions = useCallback(async (file: File): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = img.width / img.height;
+        const ratioDiff = Math.abs(ratio - TARGET_RATIO);
+        if (ratioDiff > RATIO_TOLERANCE) {
+          resolve('La imagen debe tener proporción 4:3 (ej. 1200x900, 600x450)');
+          return;
+        }
+        resolve(null);
+      };
+      img.onerror = () => resolve('No se pudo leer la imagen. Intenta con otro archivo.');
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
+
   // Handler: File selection
-  const handleFileSelect = useCallback((file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     // Validate file - Fail fast
     const error = validateFile(file);
     if (error) {
       toast.error(error);
+      return;
+    }
+
+    const dimensionError = await validateImageDimensions(file);
+    if (dimensionError) {
+      toast.error(dimensionError);
       return;
     }
 
@@ -192,7 +217,7 @@ export default function TemplateDialog({
     // Create new preview URL
     const newPreviewUrl = URL.createObjectURL(file);
     setPreviewUrl(newPreviewUrl);
-  }, [validateFile, toast, previewUrl]);
+  }, [validateFile, validateImageDimensions, toast, previewUrl]);
 
   // Handler: Drag & drop
   const handleDragOver = useCallback((e: React.DragEvent) => {

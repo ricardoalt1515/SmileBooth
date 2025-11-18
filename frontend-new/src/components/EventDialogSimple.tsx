@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI from '../services/api';
-import { EventPreset, EVENT_TYPE_LABELS } from '../types/preset';
+import { EventPreset, EVENT_TYPE_LABELS, type PhotoFilter } from '../types/preset';
 import { LAYOUT_LABELS, type Template } from '../types/template';
 import {
   Dialog,
@@ -49,6 +49,7 @@ interface FormData {
   countdown_seconds: number;
   auto_reset_seconds: number;
   template_id?: string;
+  photo_filter: PhotoFilter;
   notes: string;
   client_name: string;
   client_contact: string;
@@ -70,6 +71,7 @@ export default function EventDialogSimple({
     countdown_seconds: 5,
     auto_reset_seconds: 30,
     template_id: undefined,
+    photo_filter: 'none',
     notes: '',
     client_name: '',
     client_contact: '',
@@ -98,6 +100,7 @@ export default function EventDialogSimple({
         countdown_seconds: editingPreset.countdown_seconds,
         auto_reset_seconds: editingPreset.auto_reset_seconds,
         template_id: editingPreset.template_id,
+        photo_filter: editingPreset.photo_filter || 'none',
         notes: editingPreset.notes || '',
         client_name: editingPreset.client_name || '',
         client_contact: editingPreset.client_contact || '',
@@ -111,6 +114,7 @@ export default function EventDialogSimple({
         countdown_seconds: 5,
         auto_reset_seconds: 30,
         template_id: undefined,
+        photo_filter: 'none',
         notes: '',
         client_name: '',
         client_contact: '',
@@ -152,6 +156,7 @@ export default function EventDialogSimple({
         voice_pitch: 1.0,
         voice_volume: 1.0,
         template_id: formData.template_id,
+        photo_filter: formData.photo_filter,
         notes: formData.notes || undefined,
         client_name: formData.client_name || undefined,
         client_contact: formData.client_contact || undefined,
@@ -363,6 +368,30 @@ export default function EventDialogSimple({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Filtro de fotos */}
+          <div className="space-y-2">
+            <Label htmlFor="photo_filter">Filtro de fotos</Label>
+            <Select
+              value={formData.photo_filter}
+              onValueChange={(value: PhotoFilter) =>
+                setFormData({ ...formData, photo_filter: value })
+              }
+            >
+              <SelectTrigger id="photo_filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin filtro</SelectItem>
+                <SelectItem value="bw">Blanco y negro</SelectItem>
+                <SelectItem value="sepia">Sepia cálido</SelectItem>
+                <SelectItem value="glam">Glam (B&N suave)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              El filtro se aplica solo a las fotos, tu diseño de Canva se mantiene igual.
+            </p>
           </div>
 
           {/* Info del Cliente */}

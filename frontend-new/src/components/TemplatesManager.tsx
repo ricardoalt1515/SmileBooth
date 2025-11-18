@@ -135,9 +135,9 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Gestión de Templates</h2>
+          <h2 className="text-2xl font-bold">Gestión de Diseños</h2>
           <p className="text-muted-foreground mt-1">
-            Templates = Layout + Diseño + Posición
+            Diseños = Layout + Marco + Posición
           </p>
         </div>
         <Button 
@@ -149,7 +149,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
           }}
         >
           <Plus className="w-5 h-5" />
-          Nuevo Template
+          Nuevo Diseño
         </Button>
       </div>
 
@@ -214,7 +214,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
 
       {/* Templates List */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Templates Disponibles ({templates.length})</h3>
+        <h3 className="text-lg font-semibold mb-4">Diseños Disponibles ({templates.length})</h3>
         
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -224,9 +224,9 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Layers className="w-16 h-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No hay templates</h3>
+              <h3 className="text-lg font-semibold mb-2">No hay diseños</h3>
               <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
-                Crea tu primer template para definir el layout y diseño de tus impresiones
+                Crea tu primer diseño para definir el layout y aspecto de tus impresiones
               </p>
               <Button 
                 className="gap-2"
@@ -236,7 +236,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                 }}
               >
                 <Plus className="w-4 h-4" />
-                Crear Primer Template
+                Crear Primer Diseño
               </Button>
             </CardContent>
           </Card>
@@ -264,20 +264,25 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                 <CardContent>
                   {/* Preview */}
                   <div className="mb-4 flex items-center justify-center">
-                    {template.design_file_path ? (
-                      <img
-                        src={photoboothAPI.templates.getPreview(template.id)}
-                        alt={template.name}
-                        className="max-h-24 rounded border"
-                      />
-                    ) : (
-                      <div 
-                        className="w-20 h-28 rounded border-2 border-dashed flex items-center justify-center"
-                        style={{ backgroundColor: PREVIEW_PLACEHOLDER_COLOR }}
-                      >
-                        <Palette className="w-6 h-6 text-muted-foreground" />
-                      </div>
-                    )}
+                    <div className="relative">
+                      {template.design_file_path ? (
+                        <>
+                          <img
+                            src={photoboothAPI.templates.getPreview(template.id)}
+                            alt={template.name}
+                            className="max-h-24 rounded border"
+                          />
+                          <div className="pointer-events-none absolute inset-0 border border-dashed border-white/60 rounded" aria-label="Guías de corte" />
+                        </>
+                      ) : (
+                        <div 
+                          className="w-20 h-28 rounded border-2 border-dashed flex items-center justify-center"
+                          style={{ backgroundColor: PREVIEW_PLACEHOLDER_COLOR }}
+                        >
+                          <Palette className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Info */}
@@ -347,11 +352,11 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-1">💡 Cómo funcionan los Templates</h4>
+              <h4 className="font-semibold text-sm mb-1">💡 Cómo funcionan los Diseños</h4>
               <p className="text-sm text-muted-foreground">
-                1. Crea un template con el layout deseado (3x1, 4x1, etc.)<br />
+                1. Crea un diseño con el layout deseado (3x1, 4x1, etc.)<br />
                 2. Sube tu diseño de Canva (PNG)<br />
-                3. Activa el template cuando lo necesites<br />
+                3. Activa el diseño cuando lo necesites<br />
                 4. Úsalo en tus eventos
               </p>
             </div>

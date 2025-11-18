@@ -19,6 +19,7 @@ function App() {
     clearPhotoPaths,
     resetPhotoIndex,
     loadSettings,
+    addLog,
   } = useAppStore();
 
   const [backendError, setBackendError] = useState<boolean>(false);
@@ -67,6 +68,7 @@ function App() {
         await photoboothAPI.healthCheck();
         console.log('✅ Backend connected');
         setBackendConnected(true);
+        addLog({ level: 'info', source: 'backend', message: 'Backend conectado' });
         setBackendError(false);
 
         // Load settings from backend
@@ -81,6 +83,7 @@ function App() {
       } catch (error) {
         console.warn('⚠️  Backend not available:', error);
         setBackendConnected(false);
+        addLog({ level: 'warning', source: 'backend', message: 'Backend no disponible' });
         setBackendError(true);
         // Use default settings when backend unavailable
         loadSettings(DEFAULT_SETTINGS);
@@ -97,12 +100,13 @@ function App() {
         setBackendError(false);
       } catch (error) {
         setBackendConnected(false);
+        addLog({ level: 'warning', source: 'backend', message: 'Backend no disponible' });
         setBackendError(true);
       }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [setBackendConnected, loadSettings]);
+  }, [setBackendConnected, loadSettings, addLog]);
 
   // Cleanup al volver a start
   useEffect(() => {

@@ -9,6 +9,9 @@ interface DeviceStatusState {
   cameraDetails: string;
   printerDetails: string;
   backendDetails: string;
+  lastPrintJobError: string | null;
+  lastPrintJobId: string | null;
+  failedPrintJobs: number;
 }
 
 export function useDeviceStatus() {
@@ -19,6 +22,9 @@ export function useDeviceStatus() {
     cameraDetails: 'Verificando...',
     printerDetails: 'Verificando...',
     backendDetails: 'Verificando...',
+    lastPrintJobError: null,
+    lastPrintJobId: null,
+    failedPrintJobs: 0,
   });
 
   const checkCameraStatus = useCallback(async () => {
@@ -64,11 +70,25 @@ export function useDeviceStatus() {
           printerDetails: 'No se detectaron impresoras',
         }));
       }
+
+      // Consultar últimos jobs por si hay fallos recientes
+      const jobs = await photoboothAPI.print.listJobs();
+      const lastFailed = jobs.find((job: any) => job.status === 'failed');
+      const failedCount = jobs.filter((job: any) => job.status === 'failed').length;
+      setStatus((prev) => ({
+        ...prev,
+        lastPrintJobError: lastFailed?.error || null,
+        lastPrintJobId: lastFailed?.job_id || null,
+        failedPrintJobs: failedCount,
+      }));
     } catch (error) {
       setStatus((prev) => ({
         ...prev,
         printerStatus: 'error',
         printerDetails: 'Error al conectar con impresora',
+        lastPrintJobError: prev.lastPrintJobError,
+        lastPrintJobId: prev.lastPrintJobId,
+        failedPrintJobs: prev.failedPrintJobs,
       }));
     }
   }, []);

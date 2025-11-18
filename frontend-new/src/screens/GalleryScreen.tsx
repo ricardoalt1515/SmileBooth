@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera } from 'lucide-react';
+import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera, Folder } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI, { API_BASE_URL } from '../services/api';
@@ -22,6 +22,7 @@ interface Photo {
   filename: string;
   path: string;
   url: string;
+  thumbnail_url?: string | null;
   session_id: string;
   timestamp: string;
   size_bytes: number;
@@ -34,11 +35,20 @@ interface Stats {
   total_size_mb: number;
 }
 
+type SessionBlock = {
+  session_id: string;
+  photos: Photo[];
+  strip_url?: string | null;
+  full_strip_url?: string | null;
+  created_at?: string | null;
+};
+
 export default function GalleryScreen() {
   const { setCurrentScreen } = useAppStore();
   const toast = useToastContext();
 
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [sessions, setSessions] = useState<SessionBlock[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
@@ -71,22 +81,30 @@ export default function GalleryScreen() {
   const loadGallery = async () => {
     setIsLoading(true);
     try {
-      const data = await photoboothAPI.gallery.getPhotos();
-      console.log('📸 Gallery API Response:', data);
-      console.log('📸 Total photos:', data.photos?.length);
+      const sessionData = await photoboothAPI.gallery.list();
       
-      // Normalizar fotos: agregar API_BASE_URL a todas
-      const normalizedPhotos = data.photos.map((photo: Photo) => ({
-        ...photo,
-        url: `${API_BASE_URL}${photo.url}`,
+      const normalizedSessions: SessionBlock[] = sessionData.map((session) => ({
+        session_id: session.session_id,
+        photos: session.photos.map((photo: Photo) => ({
+          ...photo,
+          url: `${API_BASE_URL}${photo.url}`,
+          thumbnail_url: photo.thumbnail_url ? `${API_BASE_URL}${photo.thumbnail_url}` : undefined,
+        })),
+        strip_url: session.strip_url ? `${API_BASE_URL}${session.strip_url}` : null,
+        full_strip_url: session.full_strip_url ? `${API_BASE_URL}${session.full_strip_url}` : null,
+        created_at: session.created_at,
       }));
-      
-      if (normalizedPhotos.length > 0) {
-        console.log('📸 First photo URL:', normalizedPhotos[0].url);
-      }
-      
-      setPhotos(normalizedPhotos);
-      setStats(data.stats);
+
+      const flatPhotos = normalizedSessions.flatMap((session) => session.photos);
+
+      setPhotos(flatPhotos);
+      setSessions(normalizedSessions);
+      setStats({
+        total_sessions: normalizedSessions.length,
+        total_photos: flatPhotos.length,
+        latest_session: normalizedSessions[0]?.session_id ?? null,
+        total_size_mb: 0,
+      });
     } catch (error) {
       console.error('Error loading gallery:', error);
       toast.error('Error al cargar galería');
@@ -121,31 +139,25 @@ export default function GalleryScreen() {
       return;
     }
 
-    if (!activePresetId) {
-      toast.warning('No hay evento activo para exportar. Configura un evento en Configuración.');
-      return;
-    }
-
     setIsExporting(true);
     try {
-      const result = await photoboothAPI.sessions.export({
-        preset_id: activePresetId,
-      });
-
-      const downloadUrl = `${API_BASE_URL}${result.url}`;
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = result.filename || 'evento_photobooth.zip';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success('ZIP del evento descargado correctamente');
+      await photoboothAPI.gallery.exportZip();
+      toast.success('ZIP del evento descargado');
     } catch (error) {
       console.error('Error exporting event ZIP:', error);
       toast.error('Error al exportar evento');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExportSession = async (sessionId: string) => {
+    try {
+      await photoboothAPI.gallery.exportSessionZip(sessionId);
+      toast.success(`ZIP de sesión ${sessionId} descargado`);
+    } catch (error) {
+      console.error('Error exportando sesión:', error);
+      toast.error('No se pudo exportar la sesión');
     }
   };
 
@@ -320,15 +332,11 @@ export default function GalleryScreen() {
         <div className="flex gap-4 mb-8">
           <button
             onClick={handleExportZip}
-            disabled={isExporting || photos.length === 0 || !activePresetId}
+            disabled={isExporting || photos.length === 0}
             className="flex items-center gap-2 px-6 py-3 bg-[#ff0080] hover:bg-[#ff0080]/80 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-5 h-5" />
-            {isExporting
-              ? 'Exportando...'
-              : activePresetName
-                ? `Exportar ${activePresetName}`
-                : 'Configura un evento en Configuración'}
+            {isExporting ? 'Exportando...' : 'Exportar ZIP'}
           </button>
 
           <button
@@ -374,7 +382,7 @@ export default function GalleryScreen() {
 
         </div>
 
-        {/* Photos Grid */}
+        {/* Photos grouped by session */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-16 h-16 border-4 border-[#ff0080] border-t-transparent rounded-full animate-spin mb-4" />
@@ -387,47 +395,85 @@ export default function GalleryScreen() {
             <p className="text-gray-500">Las fotos capturadas aparecerán aquí</p>
           </div>
         ) : (
-          <div className="grid grid-cols-6 gap-4">
-            {photos.map((photo, index) => (
-              <div
-                key={photo.id}
-                onClick={() => setSelectedPhoto(photo)}
-                className="aspect-square rounded-xl overflow-hidden cursor-pointer group relative animate-scale-in"
-                style={{ animationDelay: `${(index % 12) * 0.05}s` }}
-              >
-                {/* Image */}
-                <img
-                  src={photo.url}
-                  alt={photo.filename}
-                  className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110 group-hover:brightness-75"
-                />
-
-                {/* Gradient overlay on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                {/* Border glow */}
-                <div
-                  className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-primary transition-all duration-300 pointer-events-none"
-                  style={{
-                    boxShadow: '0 0 0 0 var(--primary)',
-                    transition: 'box-shadow 0.3s, border-color 0.3s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = 'var(--shadow-glow-magenta)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 0 0 0 var(--primary)';
-                  }}
-                />
-
-                {/* Hover info */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-10">
-                  <p className="text-xs font-medium truncate">
-                    {formatTimestamp(photo.timestamp)}
-                  </p>
-                  <p className="text-[10px] text-white/60 truncate">
-                    {photo.filename}
-                  </p>
+          <div className="space-y-6">
+            {sessions.map((session) => (
+              <div key={session.session_id} className="bg-white/5 rounded-2xl border border-white/10 p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Folder className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-sm text-white/60">Sesión</p>
+                    <p className="text-lg font-semibold">{session.session_id}</p>
+                  </div>
+                  <span className="ml-auto text-sm text-white/60">{session.photos.length} foto(s)</span>
+                  <button
+                    onClick={() => handleExportSession(session.session_id)}
+                    className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    ZIP sesión
+                  </button>
+                </div>
+                {(session.strip_url || session.full_strip_url) && (
+                  <div className="flex items-center gap-3 mb-3 text-sm text-white/70">
+                    {session.strip_url && (
+                      <a
+                        href={session.strip_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:text-white"
+                      >
+                        Ver strip
+                      </a>
+                    )}
+                    {session.full_strip_url && (
+                      <a
+                        href={session.full_strip_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:text-white"
+                      >
+                        Ver full_strip
+                      </a>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-6 gap-4">
+                  {session.photos.map((photo, index) => (
+                    <div
+                      key={photo.id}
+                      onClick={() => setSelectedPhoto(photo)}
+                      className="aspect-square rounded-xl overflow-hidden cursor-pointer group relative animate-scale-in"
+                      style={{ animationDelay: `${(index % 12) * 0.05}s` }}
+                    >
+                      <img
+                        src={photo.thumbnail_url || photo.url}
+                        alt={photo.filename}
+                        className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110 group-hover:brightness-75"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div
+                        className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-primary transition-all duration-300 pointer-events-none"
+                        style={{
+                          boxShadow: '0 0 0 0 var(--primary)',
+                          transition: 'box-shadow 0.3s, border-color 0.3s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.boxShadow = 'var(--shadow-glow-magenta)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.boxShadow = '0 0 0 0 var(--primary)';
+                        }}
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 p-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-10">
+                        <p className="text-xs font-medium truncate">
+                          {formatTimestamp(photo.timestamp)}
+                        </p>
+                        <p className="text-[10px] text-white/60 truncate">
+                          {photo.filename}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

@@ -3,6 +3,9 @@
  * Sincronizados con el backend
  */
 import type { LayoutType } from './template';
+
+export type PhotoFilter = 'none' | 'bw' | 'sepia' | 'glam';
+
 export interface EventPreset {
   id: string;
   name: string;
@@ -19,6 +22,7 @@ export interface EventPreset {
   voice_rate: number;
   voice_pitch: number;
   voice_volume: number;
+  photo_filter?: PhotoFilter;
   
   // Template/diseño asociado
   template_id?: string;

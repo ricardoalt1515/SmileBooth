@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/constants';
+import { useAppStore } from '../store/useAppStore';
 
 // Export for use in components
 export { API_BASE_URL };
@@ -13,6 +14,14 @@ export const apiClient = axios.create({
   },
 });
 
+const logEvent = (level: 'info' | 'warning' | 'error', source: string, message: string) => {
+  // Avoid circular imports in runtime by using getState directly
+  const { addLog } = useAppStore.getState();
+  if (addLog) {
+    addLog({ level, source, message });
+  }
+};
+
 // Request interceptor for logging (optional)
 apiClient.interceptors.request.use(
   (config) => {
@@ -21,6 +30,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     console.error('[API] Request error:', error);
+    logEvent('error', 'api', `Error de request: ${error.message ?? 'desconocido'}`);
     return Promise.reject(error);
   }
 );
@@ -33,6 +43,8 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error('[API] Response error:', error.response?.status, error.message);
+    const endpoint = error.config?.url ?? 'desconocido';
+    logEvent('error', 'api', `Error ${error.response?.status ?? 'sin código'} en ${endpoint}`);
     return Promise.reject(error);
   }
 );
@@ -75,6 +87,8 @@ export const photoboothAPI = {
       design_position?: string | null;
       background_color?: string | null;
       photo_spacing?: number | null;
+      photo_filter?: string | null;
+      print_mode?: string | null;
     }) => {
       const response = await apiClient.post('/api/image/compose-strip', {
         photo_paths: params.photo_paths,
@@ -84,6 +98,8 @@ export const photoboothAPI = {
         design_position: params.design_position,
         background_color: params.background_color,
         photo_spacing: params.photo_spacing,
+        photo_filter: params.photo_filter,
+        print_mode: params.print_mode,
       });
       return response.data; // { success, strip_path, full_page_path }
     },
@@ -95,6 +111,7 @@ export const photoboothAPI = {
       design_position?: string | null;
       background_color?: string | null;
       photo_spacing?: number | null;
+      photo_filter?: string | null;
     }) => {
       const response = await apiClient.post('/api/image/preview-strip', {
         photo_paths: params.photo_paths,
@@ -103,6 +120,7 @@ export const photoboothAPI = {
         design_position: params.design_position,
         background_color: params.background_color,
         photo_spacing: params.photo_spacing,
+        photo_filter: params.photo_filter,
       }, {
         responseType: 'blob', // Recibir imagen como blob
       });
@@ -131,6 +149,29 @@ export const photoboothAPI = {
       const response = await apiClient.get('/api/print/printers');
       return response.data; // { printers, default_printer }
     },
+    test: async (printerName?: string | null) => {
+      const response = await apiClient.post('/api/print/test', null, {
+        params: { printer_name: printerName || null },
+      });
+      return response.data;
+    },
+    listJobs: async () => {
+      const response = await apiClient.get('/api/print/jobs');
+      return response.data as Array<{
+        job_id: string;
+        file_path: string;
+        printer_name: string | null;
+        copies: number;
+        status: string;
+        error?: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+    },
+    retryJob: async (jobId: string) => {
+      const response = await apiClient.post(`/api/print/jobs/${encodeURIComponent(jobId)}/retry`);
+      return response.data as { success: boolean; message: string; printer_used?: string | null };
+    },
   },
 
   // Settings endpoints
@@ -149,8 +190,15 @@ export const photoboothAPI = {
       voice_rate?: number;
       voice_pitch?: number;
       voice_volume?: number;
-      strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
+      auto_print?: boolean;
+      print_copies?: number;
+      camera_width?: number;
+      camera_height?: number;
+      mirror_preview?: boolean;
+      kiosk_mode?: boolean;
       print_mode?: 'single' | 'dual-strip';
+      paper_size?: '4x6' | '5x7';
+      strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
       photo_spacing?: number;
     }) => {
       const response = await apiClient.patch('/api/settings', updates);
@@ -164,6 +212,26 @@ export const photoboothAPI = {
 
   // Gallery endpoints
   gallery: {
+    list: async () => {
+      const response = await apiClient.get('/api/gallery/list');
+      return response.data as {
+        session_id: string;
+        photos: Array<{
+          id: string;
+          filename: string;
+          path: string;
+          url: string;
+          thumbnail_url?: string | null;
+          session_id: string;
+          timestamp: string;
+          size_bytes: number;
+        }>;
+        strip_url?: string | null;
+        full_strip_url?: string | null;
+        total_size_bytes: number;
+        created_at?: string | null;
+      }[];
+    },
     getPhotos: async () => {
       const response = await apiClient.get('/api/gallery/photos');
       return response.data; // { photos, stats }
@@ -182,6 +250,18 @@ export const photoboothAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `photobooth_event_${Date.now()}.zip`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    },
+    exportSessionZip: async (sessionId: string) => {
+      const response = await apiClient.post(`/api/gallery/sessions/${encodeURIComponent(sessionId)}/zip`, {}, {
+        responseType: 'blob',
+      });
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `session_${sessionId}.zip`;
       link.click();
       window.URL.revokeObjectURL(url);
     },
@@ -266,6 +346,7 @@ export const photoboothAPI = {
       voice_volume?: number;
       template_id?: string;
       design_id?: string;
+      photo_filter?: string;
       notes?: string;
       client_name?: string;
       client_contact?: string;
@@ -286,6 +367,7 @@ export const photoboothAPI = {
       voice_volume?: number;
       template_id?: string;
       design_id?: string;
+      photo_filter?: string;
       notes?: string;
       client_name?: string;
       client_contact?: string;

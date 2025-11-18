@@ -20,9 +20,9 @@ Clean Code Principles Applied:
 import gc
 from pathlib import Path
 from typing import List, Optional
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
 
-from app.config import IMAGE_CONFIG, STRIPS_DIR, get_photo_url
+from app.config import IMAGE_CONFIG, STRIPS_DIR, PHOTOS_DIR, get_photo_url
 from app.services.session_service import SessionService
 from app.models.template import (
     DESIGN_POSITION_TOP,
@@ -74,7 +74,8 @@ class ImageService:
         layout: Optional[str] = None,
         design_position: Optional[str] = None,
         background_color: Optional[str] = None,
-        photo_spacing: Optional[int] = None
+        photo_spacing: Optional[int] = None,
+        photo_filter: Optional[str] = None,
     ) -> Path:
         """
         Compone una tira de fotos + diseño personalizado.
@@ -117,6 +118,9 @@ class ImageService:
             BACKGROUND_COLOR = 'white'  # Default
             print(f"🎨 Color de fondo: white (default)")
         
+        # Normalizar filtro de fotos
+        photo_filter_normalized = (photo_filter or "none").strip().lower()
+
         # Determinar layout soportado (solo verticales por ahora)
         layout_clean = (layout or '').strip().lower()
         layout_supported = layout_clean if layout_clean in SUPPORTED_VERTICAL_LAYOUTS else None
@@ -177,35 +181,43 @@ class ImageService:
             
             # 1. Procesar y agregar las fotos UNA POR UNA
             for i, photo_path in enumerate(photo_paths):
-                # Cargar foto
                 photo = Image.open(photo_path)
-                
-                # Procesar foto
-                photo_processed = ImageService._process_photo(
-                    photo, 
-                    strip_width - 50,  # Ancho con margen lateral
-                    target_photo_height
-                )
-                
-                # Liberar foto original
-                photo.close()
-                del photo
-                
-                # Calcular posición centrada
-                x_pos = (strip_width - photo_processed.width) // 2
-                
-                # Pegar en strip
-                strip.paste(photo_processed, (x_pos, y_offset))
-                
-                # Liberar foto procesada
-                photo_processed.close()
-                del photo_processed
-                
-                # Forzar limpieza de memoria
-                gc.collect()
-                
-                # Siguiente posición
-                y_offset += target_photo_height + PHOTO_SPACING
+                filtered: Optional[Image.Image] = None
+
+                try:
+                  if photo_filter_normalized and photo_filter_normalized != "none":
+                      filtered = ImageService._apply_filter(photo, photo_filter_normalized)
+                  source = filtered or photo
+
+                  photo_processed = ImageService._process_photo(
+                      source,
+                      strip_width - 50,  # Ancho con margen lateral
+                      target_photo_height,
+                  )
+
+                  # Calcular posición centrada
+                  x_pos = (strip_width - photo_processed.width) // 2
+
+                  # Pegar en strip
+                  strip.paste(photo_processed, (x_pos, y_offset))
+
+                  # Liberar foto procesada
+                  photo_processed.close()
+                  del photo_processed
+
+                  # Siguiente posición
+                  y_offset += target_photo_height + PHOTO_SPACING
+                finally:
+                  if filtered is not None:
+                      filtered.close()
+                      del filtered
+
+                  # Liberar foto original
+                  photo.close()
+                  del photo
+
+                  # Forzar limpieza de memoria
+                  gc.collect()
             
             # 2. Agregar diseño abajo si aplica
             if design_exists and design_position_normalized == DESIGN_POSITION_BOTTOM:
@@ -219,11 +231,11 @@ class ImageService:
                     spacing=PHOTO_SPACING
                 )
             
-            # 3. Guardar strip
-            output_dir = STRIPS_DIR / session_id if session_id else STRIPS_DIR
+            # 3. Guardar strip en carpeta de sesión para nomenclatura consistente
+            output_dir = PHOTOS_DIR / session_id if session_id else STRIPS_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            output_filename = f"strip_{session_id}.jpg" if session_id else "strip_preview.jpg"
+            output_filename = "strip.jpg" if session_id else "strip_preview.jpg"
             output_path = output_dir / output_filename
             
             # Guardar con compresión optimizada
@@ -290,6 +302,37 @@ class ImageService:
         del resized
         
         return cropped
+
+    @staticmethod
+    def _apply_filter(photo: Image.Image, photo_filter: str) -> Image.Image:
+        """Aplica un filtro sencillo a la foto y devuelve una nueva imagen.
+
+        photo_filter soporta: "bw", "sepia", "glam". Cualquier otro valor devuelve
+        una copia sin cambios.
+        """
+        base = photo.convert("RGB")
+        name = (photo_filter or "none").strip().lower()
+
+        if name == "bw":
+            gray = ImageOps.grayscale(base)
+            return gray.convert("RGB")
+
+        if name == "sepia":
+            gray = ImageOps.grayscale(base)
+            # Tonos cálidos para efecto sepia suave
+            sepia = ImageOps.colorize(gray, "#2b1b0f", "#f5e0c7")
+            return sepia.convert("RGB")
+
+        if name == "glam":
+            gray = ImageOps.grayscale(base)
+            glam = gray.convert("RGB")
+            # Ligero realce de brillo y contraste
+            glam = ImageEnhance.Brightness(glam).enhance(1.08)
+            glam = ImageEnhance.Contrast(glam).enhance(1.12)
+            return glam
+
+        # Filtro desconocido: devolver copia directa
+        return base
 
     @staticmethod
     def _paste_design(
@@ -366,7 +409,7 @@ class ImageService:
                 )
             
             # Guardar
-            output_path = strip_path.parent / f"full_{strip_path.name}"
+            output_path = strip_path.parent / "full_strip.jpg"
             full_page.save(
                 output_path,
                 format=IMAGE_CONFIG["format"],

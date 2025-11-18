@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "photos_to_take": 4,
+  "photos_to_take": 3,
   "countdown_seconds": 5,
   "backend_url": "http://127.0.0.1:8000",
   "default_printer": null,
@@ -11,9 +11,17 @@
   "voice_pitch": 1.0,
   "voice_volume": 1.0,
   "auto_reset_seconds": 30,
+  "photo_filter": "none",
   "strip_layout": "vertical-3",
   "print_mode": "dual-strip",
+  "paper_size": "4x6",
   "photo_spacing": 20,
   "strip_width": 600,
-  "strip_height": 1800
+  "strip_height": 1800,
+  "mirror_preview": true,
+  "kiosk_mode": true,
+  "auto_print": false,
+  "print_copies": 2,
+  "camera_width": 1280,
+  "camera_height": 720
 }

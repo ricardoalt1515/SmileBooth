@@ -16,6 +16,7 @@ interface ConfettiPiece {
   color: string;
   rotation: number;
   wobble: number;
+  yOffset?: number;
 }
 
 export default function Confetti({
@@ -138,8 +139,7 @@ export function ConfettiBurst({
         color: colors[Math.floor(Math.random() * colors.length)],
         rotation: Math.random() * 360,
         wobble: Math.cos(angle + spread) * velocity, // X movement
-        // Store Y movement in rotation for animation
-        rotation: Math.sin(angle + spread) * velocity * -1, // Y movement (negative = up)
+        yOffset: Math.sin(angle + spread) * velocity * -1, // Y movement (negative = up)
       };
     });
 
@@ -170,7 +170,7 @@ export function ConfettiBurst({
             opacity: 0,
             boxShadow: `0 0 ${piece.size / 2}px ${piece.color}`,
             ['--x-pos' as string]: `${piece.wobble}px`,
-            ['--y-pos' as string]: `${piece.rotation}px`,
+            ['--y-pos' as string]: `${piece.yOffset ?? 0}px`,
             ['--rotation' as string]: `${Math.random() * 720}deg`,
           }}
         />
