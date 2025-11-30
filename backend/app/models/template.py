@@ -67,6 +67,10 @@ class Template(BaseModel):
         le=100,
         description="Spacing between photos in pixels"
     )
+    photo_filter: str = Field(
+        default="none",
+        description="Photo filter: none, bw, sepia, glam"
+    )
     
     # Metadata
     is_active: bool = Field(
@@ -92,6 +96,7 @@ class TemplateCreate(BaseModel):
     design_position: DesignPositionType = DESIGN_POSITION_BOTTOM
     background_color: str = "#FFFFFF"
     photo_spacing: int = Field(default=20, ge=0, le=100)
+    photo_filter: str = "none"
 
 
 class TemplateUpdate(BaseModel):
@@ -102,6 +107,7 @@ class TemplateUpdate(BaseModel):
     design_position: DesignPositionType | None = None
     background_color: str | None = None
     photo_spacing: int | None = Field(default=None, ge=0, le=100)
+    photo_filter: str | None = None
 
 
 def get_layout_photo_count(layout: LayoutType) -> int:

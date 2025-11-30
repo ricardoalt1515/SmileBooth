@@ -1,7 +1,7 @@
 """
 API de Cámara - Endpoints optimizados
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from app.services.camera_service import CameraService
 from app.config import get_photo_url
 from app.schemas.camera import (
@@ -39,6 +39,34 @@ async def capture_photo(request: CaptureRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Error al capturar foto: {str(e)}"
+        )
+
+
+@router.post("/upload", response_model=CaptureResponse)
+async def upload_photo(
+    file: UploadFile = File(...),
+    session_id: str | None = Form(None),
+):
+    """Recibe una foto capturada por el renderer y la guarda como parte de una sesión."""
+    try:
+        contents = await file.read()
+        session_value, filepath = CameraService.save_uploaded_bytes(
+            contents,
+            session_id=session_id,
+        )
+
+        photo_url = get_photo_url(filepath)
+
+        return CaptureResponse(
+            success=True,
+            session_id=session_value,
+            file_path=photo_url,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al subir foto: {str(e)}",
         )
 
 

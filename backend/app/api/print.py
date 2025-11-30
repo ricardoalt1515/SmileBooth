@@ -55,13 +55,30 @@ async def queue_print(request: PrintRequest):
 
         printer_name = request.printer_name or PrintService.get_default_printer()
         if not printer_name:
-            raise HTTPException(
-                400,
-                "No hay impresora predeterminada configurada. Selecciona una impresora en Configuración."
-            )
+            # Fallback silencioso para evitar crash en UI
+            print("⚠️ No printer found for queue, using Virtual Fallback")
+            printer_name = "Virtual_Printer_Fallback"
+
+        # Verificar modo de impresión (dual-strip vs single)
+        settings = load_settings()
+        final_path = file_path
+
+        # Evitar duplicar nuevamente si ya estamos recibiendo un full_strip
+        # (por ejemplo, cuando el frontend manda full_page_path creado en compose-strip).
+        is_already_full_strip = file_path.name.lower().startswith("full_strip") or "full_strip" in file_path.name.lower()
+
+        if settings.print_mode == "dual-strip" and not is_already_full_strip:
+            from app.services.image_service import ImageService
+            try:
+                # Generar composición 4x6 con dos tiras
+                print(f"✂️ Generando dual-strip para: {file_path.name}")
+                final_path = ImageService.create_duplicate_strip(file_path)
+            except Exception as e:
+                print(f"⚠️ Error generando dual-strip, imprimiendo original: {e}")
+                # Fallback al original si falla la duplicación
 
         success = PrintService.print_image(
-            file_path,
+            final_path,
             printer_name,
             request.copies
         )
@@ -70,7 +87,7 @@ async def queue_print(request: PrintRequest):
             PrintQueueService.update_status(job.job_id, "sent", None)
             return PrintResponse(
                 success=True,
-                message=f"{request.copies} copias enviadas a impresora",
+                message=f"{request.copies} copias enviadas a impresora ({settings.print_mode})",
                 printer_used=printer_name
             )
 

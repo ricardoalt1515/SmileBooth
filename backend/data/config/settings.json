@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "photos_to_take": 3,
-  "countdown_seconds": 5,
+  "countdown_seconds": 7,
   "backend_url": "http://127.0.0.1:8000",
   "default_printer": null,
   "active_design_id": "design_20251109_121201",

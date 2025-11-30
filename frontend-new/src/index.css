@@ -370,6 +370,67 @@
    ADVANCED KEYFRAME ANIMATIONS
    ============================================ */
 
+/* Flash Organic - Realistic camera flash */
+@keyframes flash-organic {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1.05);
+    background-color: white;
+    box-shadow: 0 0 100px 50px white;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* Countdown Pulse - Heartbeat for timer */
+@keyframes countdown-pulse {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 0 20px var(--primary);
+  }
+  50% {
+    transform: scale(1.2);
+    text-shadow: 0 0 40px var(--primary), 0 0 80px var(--primary);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 20px var(--primary);
+  }
+}
+
+/* Photo Fly - Dynamic flight to sidebar */
+/* Note: This is a base; specific coordinates should be set via inline styles */
+@keyframes photo-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+    top: 50%;
+    left: 50%;
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    top: 50%;
+    left: 50%;
+    box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.2);
+    /* Target position set by JS */
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.1);
+  }
+}
+
 /* Breathe Animation - Subtle pulsing */
 @keyframes breathe {
   0%, 100% {
@@ -542,6 +603,14 @@
 }
 
 /* Animation Utility Classes */
+.animate-flash-organic {
+  animation: flash-organic 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-countdown-pulse {
+  animation: countdown-pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 .animate-breathe {
   animation: breathe 3s ease-in-out infinite;
 }

@@ -13,6 +13,7 @@ import os
 
 from app.config import DATA_DIR
 from app.api.settings import load_settings
+from app.logging_config import logger
 
 PRINT_SIMULATION = os.getenv("PRINT_SIMULATION", "0") == "1"
 
@@ -77,7 +78,7 @@ class PrintService:
                 return printer.strip()
             return None
         except Exception as exc:  # pragma: no cover - solo logging defensivo
-            print(f"Error leyendo default_printer de settings.json: {exc}")
+            logger.error(f"Error leyendo default_printer de settings.json: {exc}")
             return None
 
     @staticmethod
@@ -95,7 +96,7 @@ class PrintService:
             else:
                 return []
         except Exception as e:
-            print(f"Error al detectar impresoras: {e}")
+            logger.error(f"Error al detectar impresoras: {e}")
             return []
     
     @staticmethod
@@ -181,8 +182,11 @@ class PrintService:
 
             return None
         except Exception as e:  # pragma: no cover - dependiente de SO
-            print(f"Error al obtener impresora predeterminada: {e}")
-            return None
+            logger.error(f"Error al obtener impresora predeterminada: {e}")
+            return "Virtual_Printer_Fallback"
+        
+        # Si llegamos aquí y no hay impresora, devolver fallback para evitar crash
+        return "Virtual_Printer_Fallback"
     
     @staticmethod
     def print_image(
@@ -201,9 +205,9 @@ class PrintService:
         Returns:
             True si la impresión fue exitosa
         """
-        if PRINT_SIMULATION:
+        if PRINT_SIMULATION or printer_name == "Virtual_Printer_Fallback":
             target_printer = printer_name or "SIMULATED_PRINTER"
-            print(f"SIMULATED PRINT -> {image_path} x{copies} on {target_printer}")
+            logger.info(f"SIMULATED PRINT -> {image_path} x{copies} on {target_printer}")
             return True
 
         if not image_path.exists():
@@ -223,7 +227,7 @@ class PrintService:
                 print(f"Sistema no soportado: {system}")
                 return False
         except Exception as e:
-            print(f"Error al imprimir: {e}")
+            logger.error(f"Error al imprimir: {e}", exc_info=True)
             return False
     
     @staticmethod

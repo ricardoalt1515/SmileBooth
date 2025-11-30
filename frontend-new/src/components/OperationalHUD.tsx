@@ -1,4 +1,4 @@
-import { Camera, Printer, Wifi, WifiOff, AlertCircle } from 'lucide-react';
+import { Camera, Printer, Wifi, WifiOff, AlertCircle, RefreshCw } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -19,6 +19,9 @@ interface OperationalHUDProps {
   lastPrintJobId?: string | null;
   failedPrintJobs?: number;
   onStatusClick?: (device: 'camera' | 'printer' | 'backend') => void;
+  pollingEnabled?: boolean;
+  onManualRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export default function OperationalHUD({
@@ -31,6 +34,9 @@ export default function OperationalHUD({
   lastPrintJobError,
   failedPrintJobs = 0,
   onStatusClick,
+  pollingEnabled = true,
+  onManualRefresh,
+  isRefreshing = false,
 }: OperationalHUDProps) {
   const getStatusColor = (status: DeviceStatus) => {
     switch (status) {
@@ -67,6 +73,28 @@ export default function OperationalHUD({
   return (
     <div className="fixed top-4 left-4 z-50 flex gap-2" data-mode="staff">
       <TooltipProvider delayDuration={200}>
+        {(onManualRefresh || !pollingEnabled) && (
+          <div className="flex flex-col gap-1 mr-2">
+            {onManualRefresh && (
+              <button
+                type="button"
+                aria-label="Actualizar estado"
+                className="glass border-white/20 text-white/80 px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:border-white/40"
+                onClick={onManualRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`w-3 h-3 transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Actualizando…' : 'Actualizar'}
+              </button>
+            )}
+            {!pollingEnabled && (
+              <span className="text-[10px] text-amber-200 tracking-wide uppercase">
+                Polling apagado
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Camera Status */}
         <Tooltip>
           <TooltipTrigger asChild>

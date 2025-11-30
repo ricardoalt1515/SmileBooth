@@ -118,9 +118,16 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
       await loadTemplates();
       setIsDeleteDialogOpen(false);
       setTemplateToDelete(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting template:', error);
-      toast.error('Error al eliminar template');
+
+      // Show specific error message from backend if available
+      const errorMessage = error?.response?.data?.detail ||
+                          error?.response?.data?.message ||
+                          error?.message ||
+                          'Error al eliminar template';
+
+      toast.error(errorMessage);
     }
   };
 
@@ -137,7 +144,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
         <div>
           <h2 className="text-2xl font-bold">Gestión de Diseños</h2>
           <p className="text-muted-foreground mt-1">
-            Diseños = Layout + Marco + Posición
+            Paso 1: elige o crea el diseño que se usará en la cabina (layout + marco + posición).
           </p>
         </div>
         <Button 
@@ -326,13 +333,15 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                       <Edit2 className="w-3 h-3" />
                     </Button>
                     
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
+                      disabled={template.is_active}
                       onClick={() => {
                         setTemplateToDelete(template.id);
                         setIsDeleteDialogOpen(true);
                       }}
+                      title={template.is_active ? 'No puedes eliminar un template activo. Desactívalo primero.' : 'Eliminar template'}
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
@@ -352,12 +361,12 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-1">💡 Cómo funcionan los Diseños</h4>
+              <h4 className="font-semibold text-sm mb-1">💡 Flujo recomendado</h4>
               <p className="text-sm text-muted-foreground">
-                1. Crea un diseño con el layout deseado (3x1, 4x1, etc.)<br />
-                2. Sube tu diseño de Canva (PNG)<br />
-                3. Activa el diseño cuando lo necesites<br />
-                4. Úsalo en tus eventos
+                1. Crea un diseño con el layout deseado (3x1, 4x1, etc.) y su filtro.<br />
+                2. Sube tu diseño de Canva (PNG) y actívalo como diseño actual.<br />
+                3. Ve a la pestaña <strong>General</strong> para definir cuántas fotos, countdown y audio.<br />
+                4. Cierra configuración y prueba la cabina.
               </p>
             </div>
           </div>

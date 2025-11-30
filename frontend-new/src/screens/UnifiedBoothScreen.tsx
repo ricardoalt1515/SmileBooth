@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useReducer } from 'react';
 import Webcam from 'react-webcam';
 import { useAppStore } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
@@ -15,8 +15,98 @@ import { LAYOUT_LABELS, getLayoutPhotoCount, LAYOUT_3X1_VERTICAL } from '../type
 import { Calendar } from 'lucide-react';
 import Confetti from '../components/Confetti';
 import StaffLogPanel from '../components/StaffLogPanel';
+import FilterSelector from '../components/FilterSelector';
 
-type BoothState = 'idle' | 'countdown' | 'capturing' | 'pausing' | 'reviewing' | 'preview-final' | 'processing' | 'success';
+type BoothState = 'idle' | 'countdown' | 'capturing' | 'pausing' | 'reviewing' | 'preview-final' | 'processing';
+
+interface BoothFSMState {
+  mode: BoothState;
+  countdown: number;
+  pauseCountdown: number;
+  autoResetTimer: number;
+}
+
+type BoothAction =
+  | { type: 'RESET_ALL'; countdownSeconds: number }
+  | { type: 'START_SESSION'; countdownSeconds: number }
+  | { type: 'TICK_COUNTDOWN' }
+  | { type: 'TO_CAPTURING' }
+  | { type: 'TO_PAUSING'; pauseSeconds: number }
+  | { type: 'TICK_PAUSE' }
+  | { type: 'TO_REVIEWING' }
+  | { type: 'TO_PREVIEW_FINAL' }
+  | { type: 'TO_PROCESSING' }
+  | { type: 'TO_IDLE' }
+  | { type: 'TICK_AUTO_RESET' };
+
+function boothReducer(state: BoothFSMState, action: BoothAction): BoothFSMState {
+  switch (action.type) {
+    case 'RESET_ALL':
+      return {
+        mode: 'idle',
+        countdown: action.countdownSeconds,
+        pauseCountdown: PAUSE_BETWEEN_SHOTS_SECONDS,
+        autoResetTimer: SUCCESS_AUTO_RESET_SECONDS,
+      };
+    case 'START_SESSION':
+      return {
+        ...state,
+        mode: 'countdown',
+        countdown: action.countdownSeconds,
+      };
+    case 'TICK_COUNTDOWN':
+      return {
+        ...state,
+        countdown: state.countdown > 0 ? state.countdown - 1 : 0,
+      };
+    case 'TO_CAPTURING':
+      return {
+        ...state,
+        mode: 'capturing',
+      };
+    case 'TO_PAUSING':
+      return {
+        ...state,
+        mode: 'pausing',
+        pauseCountdown: action.pauseSeconds,
+      };
+    case 'TICK_PAUSE':
+      return {
+        ...state,
+        pauseCountdown: state.pauseCountdown > 0 ? state.pauseCountdown - 1 : 0,
+      };
+    case 'TO_REVIEWING':
+      return {
+        ...state,
+        mode: 'reviewing',
+      };
+    case 'TO_PREVIEW_FINAL':
+      return {
+        ...state,
+        mode: 'preview-final',
+      };
+    case 'TO_PROCESSING':
+      return {
+        ...state,
+        mode: 'processing',
+      };
+    case 'TO_IDLE':
+      return {
+        ...state,
+        mode: 'idle',
+      };
+    case 'TICK_AUTO_RESET':
+      return {
+        ...state,
+        autoResetTimer: state.autoResetTimer > 0 ? state.autoResetTimer - 1 : 0,
+      };
+    default:
+      return state;
+  }
+}
+
+export type { BoothState, BoothFSMState, BoothAction };
+export { boothReducer };
 
 const getTemplateLayoutLabel = (layout?: string | null) =>
   layout ? LAYOUT_LABELS[layout as keyof typeof LAYOUT_LABELS] ?? null : null;
@@ -29,6 +119,27 @@ const COUNTDOWN_BEEP_DURATION_MS = 150;
 const GO_BEEP_DURATION_MS = 200;
 const PAUSE_BETWEEN_SHOTS_SECONDS = 2;
 const SUCCESS_AUTO_RESET_SECONDS = 30;
+
+// CSS Filters Map
+const FILTER_CSS: Record<string, string> = {
+  none: '',
+  bw: 'grayscale(100%)',
+  sepia: 'sepia(100%)',
+  glam: 'brightness(1.1) contrast(1.1) saturate(1.2)',
+};
+
+const dataURLToBlob = (dataURL: string): Blob => {
+  const [header, base64] = dataURL.split(',');
+  const match = header.match(/data:(.*);base64/);
+  const mime = match?.[1] || 'image/jpeg';
+  const binary = atob(base64);
+  const length = binary.length;
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+};
 
 export default function UnifiedBoothScreen() {
   const {
@@ -47,15 +158,25 @@ export default function UnifiedBoothScreen() {
     mirrorPreview,
     kioskMode,
     addLog,
+    photoFilter,
+    sessionPhotoFilter,
+    setSessionPhotoFilter,
+    isBackendConnected,
   } = useAppStore();
 
   const webcamRef = useRef<Webcam>(null);
   const escapeTimestampsRef = useRef<number[]>([]);
-  const [boothState, setBoothState] = useState<BoothState>('idle');
-  const [countdown, setCountdown] = useState(countdownSeconds || 5);
-  const [pauseCountdown, setPauseCountdown] = useState(PAUSE_BETWEEN_SHOTS_SECONDS);
+  const [fsm, dispatch] = useReducer(boothReducer, {
+    mode: 'idle',
+    countdown: countdownSeconds || 5,
+    pauseCountdown: PAUSE_BETWEEN_SHOTS_SECONDS,
+    autoResetTimer: SUCCESS_AUTO_RESET_SECONDS,
+  });
+  const boothState = fsm.mode;
+  const countdown = fsm.countdown;
+  const pauseCountdown = fsm.pauseCountdown;
+  const autoResetTimer = fsm.autoResetTimer;
   const [photoSlots, setPhotoSlots] = useState<string[]>([]);
-  const [autoResetTimer, setAutoResetTimer] = useState(SUCCESS_AUTO_RESET_SECONDS);
   const [showFlash, setShowFlash] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
@@ -68,15 +189,19 @@ export default function UnifiedBoothScreen() {
   const [activeEvent, setActiveEvent] = useState<EventPreset | null>(null);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
+  const effectivePhotoFilter = kioskMode
+    ? photoFilter
+    : (sessionPhotoFilter || photoFilter);
+
   const { speak } = useAudio();
   const { playShutter, playBeep, playSuccess } = useSoundEffects();
   const toast = useToastContext();
-  const deviceStatus = useDeviceStatus();
+  const deviceStatus = useDeviceStatus({ enabled: !kioskMode });
   const activeTemplateLabel = getTemplateLayoutLabel(activeEvent?.template_layout);
-  
+
   // Calcular número de fotos efectivo: priorizar template activo, fallback a settings
-  const effectivePhotosToTake = activeEvent?.template_layout 
-    ? getLayoutPhotoCount(activeEvent.template_layout as any) 
+  const effectivePhotosToTake = activeEvent?.template_layout
+    ? getLayoutPhotoCount(activeEvent.template_layout as any)
     : photosToTake || getLayoutPhotoCount(LAYOUT_3X1_VERTICAL); // Fallback seguro
 
   // Helper: Wait for image to be ready with retry logic
@@ -96,23 +221,34 @@ export default function UnifiedBoothScreen() {
     console.warn('⚠️ Image may not be fully ready, but proceeding anyway');
   };
 
-  // Capturar foto con backend
+  // Capturar foto usando la cámara del renderer (react-webcam)
   const capturePhoto = useCallback(async () => {
     try {
+      if (!webcamRef.current) {
+        throw new Error('Cámara no inicializada');
+      }
+
       setIsCapturingPhoto(true);
-      setBoothState('capturing');
-      
+      dispatch({ type: 'TO_CAPTURING' });
+
       // Flash animado
       setShowFlash(true);
       playShutter();
       setTimeout(() => setShowFlash(false), 300);
-      
-      const response = await photoboothAPI.camera.capture({
-        camera_id: 0,
+
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        throw new Error('No se pudo capturar imagen de la cámara');
+      }
+
+      const blob = dataURLToBlob(imageSrc);
+
+      const response = await photoboothAPI.camera.upload({
+        file: blob,
         session_id: sessionId || undefined,
       });
 
-      console.log('✅ Foto capturada:', response);
+      console.log('✅ Foto capturada (renderer):', response);
 
       if (!sessionId && response.session_id) {
         setSessionId(response.session_id);
@@ -127,7 +263,7 @@ export default function UnifiedBoothScreen() {
       // ⏳ Retry logic para esperar que backend termine de escribir el archivo
       // Esto previene race condition donde <img> intenta cargar antes de que exista
       await waitForImageReady(imageUrl);
-      
+
       setPhotoSlots((prev) => [...prev, imageUrl]);
 
       addCapturedImage({
@@ -147,7 +283,7 @@ export default function UnifiedBoothScreen() {
         playSuccess();
         speak('¡Perfecto! Mira tus fotos.', { rate: 1.0, pitch: 1.1 });
         setTimeout(() => {
-          setBoothState('reviewing');
+          dispatch({ type: 'TO_REVIEWING' });
           setReviewIndex(0);
           setReviewProgress(0);
         }, 1000);
@@ -157,18 +293,17 @@ export default function UnifiedBoothScreen() {
         } else {
           speak('Bien. Siguiente foto.', { rate: 1.0, pitch: 1.0 });
         }
-        setBoothState('pausing');
-        setPauseCountdown(PAUSE_BETWEEN_SHOTS_SECONDS);
+        dispatch({ type: 'TO_PAUSING', pauseSeconds: PAUSE_BETWEEN_SHOTS_SECONDS });
       }
 
     } catch (error) {
-      console.error('Error capturing photo:', error);
+      console.error('Error capturing photo from renderer:', error);
       const message = error instanceof Error ? error.message : 'Error al capturar foto';
       setError(message);
       setErrorMessage(message);
       speak('Error al capturar. Intenta de nuevo.', { rate: 1.0, pitch: 1.0 });
       addLog({ level: 'error', source: 'camera', message });
-      setBoothState('idle');
+      dispatch({ type: 'TO_IDLE' });
     } finally {
       setIsCapturingPhoto(false);
     }
@@ -189,66 +324,85 @@ export default function UnifiedBoothScreen() {
       const duration = countdown === 1 ? GO_BEEP_DURATION_MS : COUNTDOWN_BEEP_DURATION_MS;
       playBeep(tone, duration);
       speak(countdown.toString(), { rate: 1.0, pitch: 1.0 });
-      setCountdown(countdown - 1);
+      dispatch({ type: 'TICK_COUNTDOWN' });
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [boothState, countdown, capturePhoto, playBeep, speak]);
+  }, [boothState, countdown, capturePhoto, playBeep, speak, dispatch]);
 
   // Pausa entre fotos (2 segundos)
   useEffect(() => {
     if (boothState !== 'pausing') return;
 
     if (pauseCountdown === 0) {
-      setBoothState('countdown');
-      setCountdown(countdownSeconds || 5);
+      dispatch({ type: 'START_SESSION', countdownSeconds: countdownSeconds || 5 });
       return;
     }
 
     const timer = setTimeout(() => {
-      setPauseCountdown(pauseCountdown - 1);
+      dispatch({ type: 'TICK_PAUSE' });
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [boothState, pauseCountdown]);
+  }, [boothState, pauseCountdown, countdownSeconds, dispatch]);
 
   // Iniciar sesión
   const handleStart = useCallback(() => {
     if (boothState !== 'idle') return;
-    
+
+    // Fail-fast: no iniciar si backend no está conectado
+    if (!isBackendConnected) {
+      toast.error('No se puede iniciar: backend no disponible');
+      addLog({ level: 'error', source: 'backend', message: 'Intento de inicio sin backend' });
+      speak('No puedo iniciar porque el sistema no está listo.', { rate: 1.0, pitch: 1.0 });
+      return;
+    }
+
+    // En modo staff, respetar estado detallado de dispositivos
+    if (!kioskMode) {
+      const backendOk = deviceStatus.backendStatus === 'ok';
+      const printerOk = deviceStatus.printerStatus === 'ok';
+
+      if (!backendOk || !printerOk) {
+        toast.error('No se puede iniciar: revisa impresora o backend');
+        addLog({ level: 'warning', source: 'health', message: 'Inicio bloqueado por estado de dispositivos' });
+        speak('No puedo iniciar porque hay un problema con la impresora o el sistema.', { rate: 1.0, pitch: 1.0 });
+        return;
+      }
+    }
+
     speak('Prepárate. Primera foto en cinco segundos.', { rate: 1.0, pitch: 1.0 });
     addLog({ level: 'info', source: 'session', message: 'Sesión iniciada' });
-    setBoothState('countdown');
-    setCountdown(countdownSeconds || 5);
-  }, [boothState, speak, addLog, countdownSeconds]);
+    dispatch({ type: 'START_SESSION', countdownSeconds: countdownSeconds || 5 });
+  }, [
+    boothState,
+    isBackendConnected,
+    kioskMode,
+    deviceStatus.backendStatus,
+    deviceStatus.printerStatus,
+    toast,
+    speak,
+    addLog,
+    countdownSeconds,
+    dispatch,
+  ]);
 
   // Reset
   const handleReset = useCallback(() => {
     reset();
     addLog({ level: 'warning', source: 'session', message: 'Sesión reiniciada' });
-    setBoothState('idle');
+    dispatch({ type: 'RESET_ALL', countdownSeconds: countdownSeconds || 5 });
     setPhotoSlots([]);
-    setCountdown(countdownSeconds || 5);
-    setPauseCountdown(PAUSE_BETWEEN_SHOTS_SECONDS);
-    setAutoResetTimer(SUCCESS_AUTO_RESET_SECONDS);
     setShowFlash(false);
-  }, [reset, addLog, countdownSeconds]);
+  }, [reset, addLog, countdownSeconds, dispatch]);
 
-  // Auto-reset en success (30 segundos)
-  useEffect(() => {
-    if (boothState !== 'success') return;
+  const handleFilterChange = useCallback((value: string) => {
+    setSessionPhotoFilter(value);
+  }, [setSessionPhotoFilter]);
 
-    if (autoResetTimer === 0) {
-      handleReset();
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setAutoResetTimer(autoResetTimer - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [boothState, autoResetTimer, handleReset]);
+  // Auto-reset en success (legacy overlay no usado actualmente)
+  // Si en el futuro se decide reutilizar el overlay de éxito en esta pantalla,
+  // se puede reintroducir un estado 'success' en la FSM y manejar aquí el timer.
 
   // Tecla SPACE para iniciar + flechas para carousel
   useEffect(() => {
@@ -306,7 +460,7 @@ export default function UnifiedBoothScreen() {
 
     // Duración por foto: 2.5s (primeras 2), 3s (última)
     const duration = reviewIndex === effectivePhotosToTake - 1 ? 3000 : 2500;
-    
+
     // Progress bar animation
     const progressInterval = setInterval(() => {
       setReviewProgress((prev) => {
@@ -325,7 +479,7 @@ export default function UnifiedBoothScreen() {
       } else {
         // Todas vistas → Preview Final
         speak('Generando vista previa de tu tira.', { rate: 1.0, pitch: 1.0 });
-        setBoothState('preview-final');
+        dispatch({ type: 'TO_PREVIEW_FINAL' });
         generateStripPreview();
       }
     }, duration);
@@ -341,7 +495,7 @@ export default function UnifiedBoothScreen() {
     try {
       console.log('🎬 Generando preview del strip...');
       console.log('📸 Photo paths:', photoPaths);
-      
+
       // Obtener template activo completo (DRY: reutilizar misma lógica que ProcessingScreen)
       let designPath: string | null = null;
       let activeTemplate = null;
@@ -369,7 +523,7 @@ export default function UnifiedBoothScreen() {
         design_position: activeTemplate?.design_position,
         background_color: activeTemplate?.background_color,
         photo_spacing: activeTemplate?.photo_spacing,
-        photo_filter: activeEvent?.photo_filter || 'none',
+        photo_filter: effectivePhotoFilter, // Usar filtro efectivo de la sesión
       });
 
       console.log('✅ Preview generado:', previewUrl);
@@ -379,7 +533,7 @@ export default function UnifiedBoothScreen() {
       console.error('❌ Error generando preview:', error);
       toast.error('Error al generar preview');
       // Si falla, ir directo a processing
-      setBoothState('processing');
+      dispatch({ type: 'TO_PROCESSING' });
       setCurrentScreen('processing');
     }
   };
@@ -391,7 +545,7 @@ export default function UnifiedBoothScreen() {
     if (previewCountdown === 0) {
       // Ir a processing
       speak('Procesando tu tira de fotos.', { rate: 1.0, pitch: 1.0 });
-      setBoothState('processing');
+      dispatch({ type: 'TO_PROCESSING' });
       setCurrentScreen('processing');
       return;
     }
@@ -431,15 +585,11 @@ export default function UnifiedBoothScreen() {
     }
   };
 
+  // Load gallery count and active event only on mount (removed polling to reduce load)
+  // These values don't change frequently enough to warrant polling
   useEffect(() => {
     loadGalleryCount();
     loadActiveEvent();
-    // Actualizar cada 30 segundos
-    const interval = setInterval(() => {
-      loadGalleryCount();
-      loadActiveEvent();
-    }, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   // Sincronizar preferencia de kiosk con el proceso principal
@@ -564,7 +714,7 @@ export default function UnifiedBoothScreen() {
               transition-all duration-500 relative z-10
               ${i < photoSlots.length
                 ? 'border-[3px] shadow-2xl'
-                : i === currentPhotoIndex && boothState !== 'idle' && boothState !== 'success' && boothState !== 'reviewing'
+                : i === currentPhotoIndex && boothState !== 'idle' && boothState !== 'reviewing'
                   ? 'border-[3px] border-primary animate-breathe'
                   : 'border-2 border-white/10 shadow-md'
               }
@@ -577,14 +727,14 @@ export default function UnifiedBoothScreen() {
           >
             {photoSlots[i] ? (
               <div className="relative w-full h-full group cursor-pointer transition-transform duration-300 hover:scale-110 hover:-translate-y-3 hover:shadow-2xl hover:shadow-[#ff0080]/60">
-                <img 
-                  src={photoSlots[i]} 
+                <img
+                  src={photoSlots[i]}
                   alt={`Foto ${i + 1}`}
                   className="w-full h-full object-cover transition-all duration-300 group-hover:brightness-110"
                   loading="eager"
-                  onLoad={() => console.log(`✅ Foto ${i+1} cargada`)}          
+                  onLoad={() => console.log(`✅ Foto ${i + 1} cargada`)}
                   onError={() => {
-                    console.error(`❌ Error cargando foto ${i+1}:`, photoSlots[i]);
+                    console.error(`❌ Error cargando foto ${i + 1}:`, photoSlots[i]);
                     // NO reemplazar el src - dejar que el navegador reintente
                     // Si realmente no carga, el slot vacío se verá
                   }}
@@ -655,7 +805,10 @@ export default function UnifiedBoothScreen() {
                 facingMode: 'user',
               }}
               className="w-full h-full object-cover"
-              style={{ transform: mirrorPreview ? 'scaleX(-1)' : 'none' }}
+              style={{
+                transform: mirrorPreview ? 'scaleX(-1)' : 'none',
+                filter: FILTER_CSS[effectivePhotoFilter] || '',
+              }}
               onUserMediaError={(error) => {
                 console.error('❌ Camera error:', error);
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -713,6 +866,11 @@ export default function UnifiedBoothScreen() {
               />
               <span className="relative z-10 drop-shadow-lg">TOCA PARA COMENZAR</span>
             </button>
+            {!kioskMode && (
+              <div className="absolute bottom-10">
+                <FilterSelector value={effectivePhotoFilter} onChange={handleFilterChange} />
+              </div>
+            )}
 
             {/* Floating particles */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
@@ -750,7 +908,7 @@ export default function UnifiedBoothScreen() {
 
         {/* OVERLAY: CAPTURING (Flash) */}
         {showFlash && (
-          <div 
+          <div
             className="absolute inset-0 bg-white pointer-events-none"
             style={{
               animation: 'flash 0.3s ease-out'
@@ -778,19 +936,20 @@ export default function UnifiedBoothScreen() {
             </div>
 
             {/* Foto actual - GRANDE */}
-            <div 
+            <div
               key={`review-${reviewIndex}`}
               className="relative w-[65vh] h-[65vh] rounded-3xl overflow-hidden shadow-2xl border-4 border-[#ff0080]"
               style={{
                 animation: 'carouselSlide 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards'
               }}
             >
-              <img 
-                src={photoSlots[reviewIndex]} 
+              <img
+                src={photoSlots[reviewIndex]}
                 alt={`Foto ${reviewIndex + 1}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-all duration-300"
+                style={{ filter: FILTER_CSS[effectivePhotoFilter] || '' }}
               />
-              
+
               {/* Overlay con feedback positivo */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6">
                 <p className="text-white text-3xl font-bold text-center drop-shadow-lg">
@@ -801,6 +960,13 @@ export default function UnifiedBoothScreen() {
               </div>
             </div>
 
+            {/* Filter Selector - Floating at bottom (solo en modo staff) */}
+            {!kioskMode && (
+              <div className="absolute bottom-10 z-50">
+                <FilterSelector value={effectivePhotoFilter} onChange={handleFilterChange} />
+              </div>
+            )}
+
             {/* Thumbnails navegación */}
             <div className="absolute bottom-16 flex gap-3">
               {photoSlots.map((photo, i) => (
@@ -810,15 +976,14 @@ export default function UnifiedBoothScreen() {
                     setReviewIndex(i);
                     setReviewProgress(0);
                   }}
-                  className={`w-14 h-14 rounded-lg cursor-pointer transition-all duration-300 overflow-hidden ${
-                    i === reviewIndex 
-                      ? 'ring-3 ring-[#ff0080] scale-110 opacity-100' 
+                  className={`w-14 h-14 rounded-lg cursor-pointer transition-all duration-300 overflow-hidden ${i === reviewIndex
+                      ? 'ring-3 ring-[#ff0080] scale-110 opacity-100'
                       : 'opacity-40 hover:opacity-80 hover:scale-105'
-                  }`}
+                    }`}
                 >
-                  <img 
-                    src={photo} 
-                    className="w-full h-full object-cover" 
+                  <img
+                    src={photo}
+                    className="w-full h-full object-cover"
                     alt={`Thumbnail ${i + 1}`}
                   />
                 </div>
@@ -827,7 +992,7 @@ export default function UnifiedBoothScreen() {
 
             {/* Progress bar */}
             <div className="absolute bottom-6 w-80 h-1 bg-white/20 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-[#ff0080] transition-all duration-100 ease-linear"
                 style={{ width: `${reviewProgress}%` }}
               />
@@ -842,15 +1007,15 @@ export default function UnifiedBoothScreen() {
             {stripPreviewUrl ? (
               <div className="flex flex-col items-center">
                 {/* Imagen del strip */}
-                <div 
+                <div
                   className="mb-8 rounded-2xl overflow-hidden shadow-2xl border-4 border-[#ff0080]"
                   style={{
                     animation: 'slideInUp 0.6s ease-out',
                     maxHeight: '70vh'
                   }}
                 >
-                  <img 
-                    src={stripPreviewUrl} 
+                  <img
+                    src={stripPreviewUrl}
                     alt="Preview del strip"
                     className="h-full w-auto object-contain"
                   />
@@ -867,7 +1032,7 @@ export default function UnifiedBoothScreen() {
                   <p className="text-3xl text-[#ff0080] font-bold">
                     Recoge tus fotos con el staff
                   </p>
-                  
+
                   {/* Countdown */}
                   <div className="mt-8 text-white/60 text-xl">
                     Procesando en {previewCountdown}s...
@@ -893,108 +1058,6 @@ export default function UnifiedBoothScreen() {
           </div>
         )}
 
-        {/* OVERLAY: SUCCESS - Enhanced with premium animations */}
-        {boothState === 'success' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
-            {/* Confetti celebration! */}
-            <Confetti active={true} count={60} duration={4000} />
-
-            {/* Gradient mesh background */}
-            <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{ background: 'var(--gradient-mesh)' }}
-            />
-
-            {/* Preview de las fotos - Enhanced with stagger effect */}
-            <div className="flex gap-6 mb-8 relative z-10">
-              {photoSlots.map((photo, i) => (
-                <div
-                  key={i}
-                  className={`
-                    w-48 h-36 rounded-xl overflow-hidden
-                    border-[3px] shadow-2xl
-                    hover:scale-110 hover:-rotate-2 hover:z-20
-                    transition-all duration-300 cursor-pointer
-                    stagger-${i + 1} animate-scale-in
-                  `}
-                  style={{
-                    borderColor: 'var(--primary)',
-                    boxShadow: 'var(--shadow-glow-magenta)',
-                  }}
-                  onClick={() => console.log('Click en foto', i + 1)}
-                >
-                  <img
-                    src={photo}
-                    alt={`Foto ${i + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      console.error('❌ Error en preview final:', photo);
-                      e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="%23ff0080"/></svg>';
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Success message with gradient text */}
-            <div className="text-7xl mb-6 animate-bounce-smooth">✨</div>
-            <h2 className="text-white text-6xl font-bold mb-4 gradient-text">
-              ¡Perfecto!
-            </h2>
-            <p className="text-white/70 text-xl mb-12 animate-fade-in-up">
-              Tus {effectivePhotosToTake} fotos están listas
-            </p>
-
-            {/* Enhanced action buttons */}
-            <div className="flex gap-6 relative z-10">
-              <button
-                onClick={() => {
-                  speak('Enviando a impresora.', { rate: 1.0, pitch: 1.0 });
-                  setCurrentScreen('processing');
-                }}
-                className="
-                  relative px-16 py-6 rounded-full text-white text-2xl font-bold
-                  hover:scale-105 active:scale-95 transition-all duration-300
-                  overflow-hidden group
-                "
-                style={{
-                  minHeight: '80px',
-                  background: 'var(--gradient-primary)',
-                  boxShadow: 'var(--shadow-glow-magenta), var(--shadow-xl)',
-                }}
-                aria-label="Imprimir fotos"
-              >
-                <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 2s infinite',
-                  }}
-                />
-                <span className="relative z-10">IMPRIMIR</span>
-              </button>
-
-              <button
-                onClick={handleReset}
-                className="
-                  px-16 py-6 glass rounded-full text-white text-2xl font-bold
-                  hover:scale-105 active:scale-95 transition-all duration-300
-                  border-2 border-white/20
-                "
-                style={{ minHeight: '80px' }}
-                aria-label="Nueva sesión"
-              >
-                NUEVA
-              </button>
-            </div>
-
-            <p className="text-white/50 text-lg mt-8 animate-pulse">
-              Auto-reset en {autoResetTimer}s
-            </p>
-          </div>
-        )}
-
         {/* Loading overlay mientras captura */}
         {isCapturingPhoto && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
@@ -1014,23 +1077,23 @@ export default function UnifiedBoothScreen() {
         </div>
 
         {/* Staff Dock - Menú lateral (siempre visible, acceso discreto para staff) */}
-      <StaffDock
-        onOpenSettings={handleOpenSettings}
-        onOpenGallery={handleOpenGallery}
-        onOpenDesigns={handleOpenDesigns}
-        onOpenChecklist={handleOpenChecklist}
-        onRetryPrint={
-          deviceStatus.lastPrintJobId
-            ? () => photoboothAPI.print.retryJob(deviceStatus.lastPrintJobId)
-            : undefined
-        }
-        hasPrintError={Boolean(deviceStatus.lastPrintJobError)}
-        failedPrintJobs={deviceStatus.failedPrintJobs}
-        galleryPhotoCount={galleryPhotoCount}
-      />
+        <StaffDock
+          onOpenSettings={handleOpenSettings}
+          onOpenGallery={handleOpenGallery}
+          onOpenDesigns={handleOpenDesigns}
+          onOpenChecklist={handleOpenChecklist}
+          onRetryPrint={
+            deviceStatus.lastPrintJobId
+              ? () => photoboothAPI.print.retryJob(deviceStatus.lastPrintJobId as string)
+              : undefined
+          }
+          hasPrintError={Boolean(deviceStatus.lastPrintJobError)}
+          failedPrintJobs={deviceStatus.failedPrintJobs}
+          galleryPhotoCount={galleryPhotoCount}
+        />
 
-      {/* Staff Log Panel (solo en modo staff) */}
-      {!kioskMode && <StaffLogPanel />}
+        {/* Staff Log Panel (solo en modo staff) */}
+        {!kioskMode && <StaffLogPanel />}
       </main>
 
       <HardwareChecklistDialog
@@ -1050,7 +1113,7 @@ export default function UnifiedBoothScreen() {
 
       {/* Error Toast */}
       {errorMessage && (
-        <div 
+        <div
           className="fixed top-4 right-4 bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-4 animate-slideInDown z-50"
           style={{ animation: 'slideInDown 0.3s ease-out' }}
         >

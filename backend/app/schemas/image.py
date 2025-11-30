@@ -2,6 +2,7 @@
 Schemas de imágenes
 """
 from pydantic import BaseModel
+from typing import Literal
 
 
 class ComposeStripRequest(BaseModel):
@@ -27,3 +28,10 @@ class ComposeStripResponse(BaseModel):
     strip_path: str
     full_page_path: str | None = None
     message: str = "Tira creada exitosamente"
+
+
+class ComposeJobResult(BaseModel):
+    job_id: str
+    status: Literal["pending", "processing", "completed", "failed"]
+    result: ComposeStripResponse | None = None
+    error: str | None = None

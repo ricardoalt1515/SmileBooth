@@ -9,11 +9,13 @@ import gc
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
+from PIL import Image
 
-from app.config import CAMERA_CONFIG, PHOTOS_DIR, get_photo_url
+from app.config import CAMERA_CONFIG, PHOTOS_DIR, get_photo_url, RESOURCE_LIMITS
 from app.schemas.session import SessionPhoto
 from app.services.session_service import SessionService
 from app.api.settings import load_settings
+from app.logging_config import logger
 
 
 class CameraService:
@@ -110,6 +112,7 @@ class CameraService:
             return session_id, filepath
             
         except Exception as e:
+            logger.error(f"Error crítico en captura de foto: {str(e)}", exc_info=True)
             raise RuntimeError(f"Error en captura: {str(e)}")
         
         finally:
@@ -121,13 +124,79 @@ class CameraService:
             gc.collect()
     
     @staticmethod
+    def save_uploaded_bytes(
+        data: bytes,
+        session_id: Optional[str] = None,
+    ) -> Tuple[str, Path]:
+        """Guarda una imagen subida por el renderer y la asocia a una sesión.
+
+        Mantiene el mismo contrato que capture_photo: devuelve (session_id, filepath).
+        """
+        try:
+            if not data:
+                raise RuntimeError("Imagen vacía al subir foto")
+
+            max_mb = RESOURCE_LIMITS.get("max_photo_size_mb", 10)
+            max_bytes = max_mb * 1024 * 1024
+            if len(data) > max_bytes:
+                raise RuntimeError(f"Imagen demasiado grande (> {max_mb} MB)")
+
+            if session_id is None:
+                session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            current_session = SessionService.get_session(session_id)
+            photo_index = len(current_session.photos) + 1 if current_session else 1
+            filename = f"shot-{photo_index}.jpg"
+
+            session_dir = PHOTOS_DIR / session_id
+            session_dir.mkdir(parents=True, exist_ok=True)
+
+            filepath = session_dir / filename
+            filepath.write_bytes(data)
+
+            thumb_path = session_dir / f"thumb-{photo_index}.jpg"
+
+            with Image.open(filepath) as img:
+                thumb_width = 320
+                width, height = img.size
+                if width == 0 or height == 0:
+                    raise RuntimeError("Imagen inválida al generar thumbnail")
+                scale = thumb_width / width
+                thumb_height = int(height * scale)
+                thumbnail = img.resize((thumb_width, thumb_height), Image.Resampling.LANCZOS)
+                thumbnail.save(thumb_path, format="JPEG", quality=80)
+
+            photo_url = get_photo_url(filepath)
+            thumb_url = get_photo_url(thumb_path)
+            SessionService.append_photo(
+                session_id,
+                SessionPhoto(
+                    filename=filename,
+                    path=photo_url,
+                    url=photo_url,
+                    thumbnail_url=thumb_url,
+                ),
+            )
+
+            return session_id, filepath
+
+        except Exception as e:
+            logger.error(f"Error guardando foto subida: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Error en guardado de foto: {str(e)}")
+        finally:
+            gc.collect()
+    
+    @staticmethod
     def get_available_cameras() -> list[int]:
         """
         Detecta cámaras disponibles sin mantenerlas abiertas.
         """
         available = []
         
-        for camera_id in range(5):  # Revisar primeras 5
+        # Escanear índices 0, 1, 2.
+        # NOTA: Es normal ver logs "OpenCV: out device of bound" en la consola
+        # cuando se verifica un índice que no tiene cámara conectada.
+        for camera_id in range(3):
             cap = cv2.VideoCapture(camera_id)
             if cap.isOpened():
                 available.append(camera_id)

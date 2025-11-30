@@ -9,7 +9,7 @@ import GalleryScreen from './screens/GalleryScreen';
 import Toast from './components/Toast';
 import { useToast } from './hooks/useToast';
 import photoboothAPI from './services/api';
-import { DEFAULT_SETTINGS } from './config/constants';
+import { DEFAULT_SETTINGS_PAYLOAD } from './config/constants';
 
 function App() {
   const {
@@ -71,14 +71,15 @@ function App() {
         addLog({ level: 'info', source: 'backend', message: 'Backend conectado' });
         setBackendError(false);
 
-        // Load settings from backend
+        // Load consolidated config (settings + presets + templates)
         try {
-          const settings = await photoboothAPI.settings.get();
-          console.log('⚙️ Settings loaded:', settings);
-          loadSettings(settings);
-        } catch (settingsError) {
-          console.warn('⚠️  Could not load settings, using defaults:', settingsError);
-          loadSettings(DEFAULT_SETTINGS);
+          const config = await photoboothAPI.config.get();
+          console.log('⚙️ Config loaded:', config);
+          loadSettings(config.settings);
+          // En el futuro podemos hidratar presets/templates aquí sin más requests
+        } catch (configError) {
+          console.warn('⚠️  Could not load config, using default settings:', configError);
+          loadSettings(DEFAULT_SETTINGS_PAYLOAD);
         }
       } catch (error) {
         console.warn('⚠️  Backend not available:', error);
@@ -86,16 +87,16 @@ function App() {
         addLog({ level: 'warning', source: 'backend', message: 'Backend no disponible' });
         setBackendError(true);
         // Use default settings when backend unavailable
-        loadSettings(DEFAULT_SETTINGS);
+        loadSettings(DEFAULT_SETTINGS_PAYLOAD);
       }
     };
 
     initializeApp();
 
-    // Check backend health every 30 seconds
+    // Check backend health every 60 seconds usando el endpoint consolidado
     const interval = setInterval(async () => {
       try {
-        await photoboothAPI.healthCheck();
+        await photoboothAPI.fullHealth();
         setBackendConnected(true);
         setBackendError(false);
       } catch (error) {
@@ -103,7 +104,7 @@ function App() {
         addLog({ level: 'warning', source: 'backend', message: 'Backend no disponible' });
         setBackendError(true);
       }
-    }, 30000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [setBackendConnected, loadSettings, addLog]);

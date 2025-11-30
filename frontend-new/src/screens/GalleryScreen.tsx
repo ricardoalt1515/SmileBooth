@@ -82,7 +82,7 @@ export default function GalleryScreen() {
     setIsLoading(true);
     try {
       const sessionData = await photoboothAPI.gallery.list();
-      
+
       const normalizedSessions: SessionBlock[] = sessionData.map((session) => ({
         session_id: session.session_id,
         photos: session.photos.map((photo: Photo) => ({
@@ -183,6 +183,7 @@ export default function GalleryScreen() {
         try {
           const response = await photoboothAPI.sessions.reprint(photo.session_id, {
             copies: 1,
+            file_path: photo.path || photo.url.replace(API_BASE_URL, ''),
           });
           console.log('✅ Reimpresión por sesión desde galería:', response);
           toast.success('Reimpresión enviada para la sesión');

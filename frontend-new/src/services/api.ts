@@ -5,10 +5,83 @@ import { useAppStore } from '../store/useAppStore';
 // Export for use in components
 export { API_BASE_URL };
 
+// Shared DTOs for backend contracts used in multiple places
+export interface BackendSettings {
+  photos_to_take?: number;
+  countdown_seconds?: number;
+  audio_enabled?: boolean;
+  voice_rate?: number;
+  voice_pitch?: number;
+  voice_volume?: number;
+  auto_reset_seconds?: number;
+  mirror_preview?: boolean;
+  kiosk_mode?: boolean;
+  auto_print?: boolean;
+  print_copies?: number;
+  camera_width?: number;
+  camera_height?: number;
+  print_mode?: 'single' | 'dual-strip';
+  paper_size?: '4x6' | '5x7';
+  strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
+  photo_spacing?: number;
+  photo_filter?: string | null;
+}
+
+export interface ConfigResponse {
+  settings: BackendSettings;
+  presets: any[];
+  active_preset: any | null;
+  templates: any[];
+  active_template: any | null;
+}
+
+interface HealthJobSummary {
+  job_id: string;
+  status: string;
+  error?: string | null;
+}
+
+export interface FullHealthResponse {
+  backend: {
+    status: string;
+    message?: string;
+    version?: string;
+  };
+  camera?: {
+    status: string;
+    available_cameras?: number[];
+    message?: string;
+  };
+  printer?: {
+    status: string;
+    printers?: string[];
+    default_printer?: string | null;
+    message?: string;
+  };
+  print_queue?: {
+    total_jobs: number;
+    failed_jobs: number;
+    last_job: HealthJobSummary | null;
+    last_failed: HealthJobSummary | null;
+    error?: string;
+  };
+}
+
 // Create axios instance with default config
-export const apiClient = axios.create({
+export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds timeout
+  timeout: 10000, // 10 seconds timeout (reduced from 30s for better UX)
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Special client for long-running image operations
+const imageProcessingClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds for image processing only
   headers: {
     'Content-Type': 'application/json',
   },
@@ -56,6 +129,19 @@ export const photoboothAPI = {
     const response = await apiClient.get('/health');
     return response.data;
   },
+  fullHealth: async (options?: { includeCamera?: boolean }) => {
+    const response = await apiClient.get<FullHealthResponse>('/api/health/full', {
+      params: options?.includeCamera ? { include_camera: true } : undefined,
+    });
+    return response.data;
+  },
+
+  config: {
+    get: async () => {
+      const response = await apiClient.get<ConfigResponse>('/api/config');
+      return response.data;
+    },
+  },
 
   // Camera endpoints
   camera: {
@@ -68,6 +154,21 @@ export const photoboothAPI = {
         camera_id: params.camera_id ?? 0,
         session_id: params.session_id ?? null,
       });
+      return response.data; // { success, session_id, file_path }
+    },
+    upload: async (params: { file: Blob | File; session_id?: string }) => {
+      const formData = new FormData();
+      formData.append('file', params.file);
+      if (params.session_id) {
+        formData.append('session_id', params.session_id);
+      }
+
+      const response = await apiClient.post('/api/camera/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
       return response.data; // { success, session_id, file_path }
     },
     test: async (cameraId: number) => {
@@ -90,7 +191,8 @@ export const photoboothAPI = {
       photo_filter?: string | null;
       print_mode?: string | null;
     }) => {
-      const response = await apiClient.post('/api/image/compose-strip', {
+      // Use imageProcessingClient for longer timeout
+      const response = await imageProcessingClient.post('/api/image/compose-strip', {
         photo_paths: params.photo_paths,
         design_path: params.design_path || null,
         session_id: params.session_id,
@@ -103,6 +205,54 @@ export const photoboothAPI = {
       });
       return response.data; // { success, strip_path, full_page_path }
     },
+    composeStripJob: async (params: {
+      photo_paths: string[];
+      design_path?: string | null;
+      session_id?: string;
+      layout?: string | null;
+      design_position?: string | null;
+      background_color?: string | null;
+      photo_spacing?: number | null;
+      photo_filter?: string | null;
+      print_mode?: string | null;
+    }) => {
+      const response = await apiClient.post('/api/image/jobs/compose', {
+        photo_paths: params.photo_paths,
+        design_path: params.design_path || null,
+        session_id: params.session_id,
+        layout: params.layout,
+        design_position: params.design_position,
+        background_color: params.background_color,
+        photo_spacing: params.photo_spacing,
+        photo_filter: params.photo_filter,
+        print_mode: params.print_mode,
+      });
+      return response.data as {
+        job_id: string;
+        status: JobStatus;
+        result?: {
+          success: boolean;
+          strip_path: string;
+          full_page_path?: string | null;
+          message?: string;
+        } | null;
+        error?: string | null;
+      };
+    },
+    getComposeJobStatus: async (jobId: string) => {
+      const response = await apiClient.get(`/api/image/jobs/${encodeURIComponent(jobId)}`);
+      return response.data as {
+        job_id: string;
+        status: JobStatus;
+        result?: {
+          success: boolean;
+          strip_path: string;
+          full_page_path?: string | null;
+          message?: string;
+        } | null;
+        error?: string | null;
+      };
+    },
     previewStrip: async (params: {
       photo_paths: string[];
       design_path?: string | null;
@@ -113,7 +263,8 @@ export const photoboothAPI = {
       photo_spacing?: number | null;
       photo_filter?: string | null;
     }) => {
-      const response = await apiClient.post('/api/image/preview-strip', {
+      // Use imageProcessingClient for longer timeout
+      const response = await imageProcessingClient.post('/api/image/preview-strip', {
         photo_paths: params.photo_paths,
         design_path: params.design_path || null,
         layout: params.layout,
@@ -186,6 +337,7 @@ export const photoboothAPI = {
       backend_url?: string;
       default_printer?: string | null;
       active_design_id?: string | null;
+      active_template_id?: string | null;
       audio_enabled?: boolean;
       voice_rate?: number;
       voice_pitch?: number;
@@ -200,6 +352,7 @@ export const photoboothAPI = {
       paper_size?: '4x6' | '5x7';
       strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
       photo_spacing?: number;
+      photo_filter?: string | null;
     }) => {
       const response = await apiClient.patch('/api/settings', updates);
       return response.data; // Updated Settings object
@@ -398,6 +551,7 @@ export const photoboothAPI = {
       design_position: string;
       background_color: string;
       photo_spacing: number;
+      photo_filter?: string;
     }) => {
       const response = await apiClient.post('/api/templates/create', templateData);
       return response.data; // Template object
@@ -420,6 +574,7 @@ export const photoboothAPI = {
       design_position?: string;
       background_color?: string;
       photo_spacing?: number;
+      photo_filter?: string;
     }) => {
       const response = await apiClient.put(`/api/templates/${templateId}`, updates);
       return response.data; // Template object
@@ -431,7 +586,7 @@ export const photoboothAPI = {
     uploadDesign: async (templateId: string, file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await apiClient.post(
         `/api/templates/${templateId}/upload-design`,
         formData,

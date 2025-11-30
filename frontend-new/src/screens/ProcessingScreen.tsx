@@ -17,7 +17,7 @@ export default function ProcessingScreen() {
   } = useAppStore();
 
   const { speak } = useAudio();
-  const { photoPaths, sessionId, photoFilter } = useAppStore();
+  const { photoPaths, sessionId, photoFilter, sessionPhotoFilter } = useAppStore();
   const [progress, setProgress] = useState(0);
   const toast = useToastContext();
   const hasProcessedRef = useRef(false);
@@ -57,8 +57,9 @@ export default function ProcessingScreen() {
           console.warn('⚠️  No hay template activo, usando configuración por defecto');
         }
 
-        // Compose strip with backend
-        const stripResponse = await photoboothAPI.image.composeStrip({
+        // Compose strip with backend using job API (future-proof for async workers)
+        const effectivePhotoFilter = sessionPhotoFilter || photoFilter || 'none';
+        const job = await photoboothAPI.image.composeStripJob({
           photo_paths: photoPaths,
           design_path: designPath,
           session_id: sessionId || undefined,
@@ -66,14 +67,36 @@ export default function ProcessingScreen() {
           design_position: activeTemplate?.design_position,
           background_color: activeTemplate?.background_color,
           photo_spacing: activeTemplate?.photo_spacing,
-          photo_filter: photoFilter || 'none',
+          photo_filter: effectivePhotoFilter,
           print_mode: printMode,
         });
+
+        let stripResponse = job.result;
+
+        if (!stripResponse || job.status !== 'completed') {
+          // Pequeño bucle de polling para cuando el trabajo sea realmente asíncrono
+          for (let i = 0; i < 10; i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const status = await photoboothAPI.image.getComposeJobStatus(job.job_id);
+            if (status.status === 'completed' && status.result) {
+              stripResponse = status.result;
+              break;
+            }
+            if (status.status === 'failed') {
+              throw new Error(status.error || 'Error en job de composición');
+            }
+          }
+        }
+
+        if (!stripResponse) {
+          throw new Error('No se obtuvo resultado de composición');
+        }
 
         console.log('✅ Strip creado:', stripResponse);
 
         if (stripResponse.success) {
-          setStripData(stripResponse.strip_path, stripResponse.full_page_path);
+          const fullPageOrStrip = stripResponse.full_page_path || stripResponse.strip_path;
+          setStripData(stripResponse.strip_path, fullPageOrStrip);
 
           if (autoPrint) {
             const targetPath =
@@ -144,7 +167,7 @@ export default function ProcessingScreen() {
       clearInterval(progressInterval);
       hasProcessedRef.current = false;
     };
-  }, [capturedImages, photoPaths, sessionId, setStripData, setCurrentScreen, setIsLoading, setError, speak, autoPrint, printCopies, photoFilter, printMode]);
+  }, [capturedImages, photoPaths, sessionId, setStripData, setCurrentScreen, setIsLoading, setError, speak, autoPrint, printCopies, photoFilter, sessionPhotoFilter, printMode]);
 
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white relative overflow-hidden">

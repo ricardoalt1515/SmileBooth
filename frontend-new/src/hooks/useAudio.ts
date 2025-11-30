@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { useAppStore } from '../store/useAppStore';
 
 // Audio URLs - usando sonidos de dominio público o generados
 const AUDIO_FILES = {
@@ -43,33 +44,53 @@ export const useAudio = (): UseAudioReturn => {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configurar voz en español
+
+    // Obtener voz seleccionada del store
+    const { selectedVoiceURI } = useAppStore.getState();
     const voices = window.speechSynthesis.getVoices();
-    const spanishVoice = voices.find(
-      voice => voice.lang.startsWith('es-') || voice.lang === 'es'
-    );
-    
-    if (spanishVoice) {
-      utterance.voice = spanishVoice;
+
+    let targetVoice: SpeechSynthesisVoice | undefined;
+
+    if (selectedVoiceURI) {
+      targetVoice = voices.find(v => v.voiceURI === selectedVoiceURI);
     }
-    
+
+    // Fallback: buscar voz en español
+    if (!targetVoice) {
+      targetVoice = voices.find(
+        voice => voice.lang.startsWith('es-') || voice.lang === 'es'
+      );
+    }
+
+    if (targetVoice) {
+      utterance.voice = targetVoice;
+    }
+
     utterance.lang = 'es-ES';
     utterance.rate = options.rate || 1;
     utterance.pitch = options.pitch || 1;
     utterance.volume = options.volume || 1;
 
     utteranceRef.current = utterance;
-    
+
     // Esperar a que las voces estén cargadas
     if (voices.length === 0) {
       window.speechSynthesis.addEventListener('voiceschanged', () => {
         const newVoices = window.speechSynthesis.getVoices();
-        const newSpanishVoice = newVoices.find(
-          voice => voice.lang.startsWith('es-') || voice.lang === 'es'
-        );
-        if (newSpanishVoice) {
-          utterance.voice = newSpanishVoice;
+        let newTargetVoice: SpeechSynthesisVoice | undefined;
+
+        if (selectedVoiceURI) {
+          newTargetVoice = newVoices.find(v => v.voiceURI === selectedVoiceURI);
+        }
+
+        if (!newTargetVoice) {
+          newTargetVoice = newVoices.find(
+            voice => voice.lang.startsWith('es-') || voice.lang === 'es'
+          );
+        }
+
+        if (newTargetVoice) {
+          utterance.voice = newTargetVoice;
         }
         window.speechSynthesis.speak(utterance);
       }, { once: true });
@@ -134,7 +155,7 @@ export const useSoundEffects = () => {
 
     const source = ctx.createBufferSource();
     const gainNode = ctx.createGain();
-    
+
     source.buffer = buffer;
     source.connect(gainNode);
     gainNode.connect(ctx.destination);
@@ -147,7 +168,7 @@ export const useSoundEffects = () => {
   const playSuccess = useCallback(() => {
     const ctx = getContext();
     const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 (acorde de Do mayor)
-    
+
     notes.forEach((frequency, index) => {
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();

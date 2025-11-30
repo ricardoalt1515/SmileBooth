@@ -70,7 +70,7 @@ export default function EventsManager({ onEventActivated }: EventsManagerProps) 
     const map: Record<string, string> = {
       bw: 'Blanco y negro',
       sepia: 'Sepia',
-      glam: 'Glam (B&N)',
+      glam: 'Glam',
     };
     return map[filter] || null;
   };

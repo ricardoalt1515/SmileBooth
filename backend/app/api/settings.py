@@ -14,9 +14,15 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # Settings file path
 SETTINGS_FILE = Path(__file__).parent.parent.parent / "data" / "config" / "settings.json"
 
+# Simple in-process cache to avoid rereading JSON on every request
+_SETTINGS_CACHE: Settings | None = None
+_SETTINGS_MTIME: float | None = None
+
 
 def load_settings() -> Settings:
     """Load settings from JSON file, create with defaults if missing"""
+    global _SETTINGS_CACHE, _SETTINGS_MTIME
+
     if not SETTINGS_FILE.exists():
         # Create default settings
         default_settings = Settings()
@@ -24,21 +30,37 @@ def load_settings() -> Settings:
         return default_settings
 
     try:
-        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+        mtime = SETTINGS_FILE.stat().st_mtime
+        if _SETTINGS_CACHE is not None and _SETTINGS_MTIME == mtime:
+            return _SETTINGS_CACHE
+
+        with SETTINGS_FILE.open('r', encoding='utf-8') as f:
             data = json.load(f)
-        return Settings(**data)
+
+        settings = Settings(**data)
+        _SETTINGS_CACHE = settings
+        _SETTINGS_MTIME = mtime
+        return settings
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading settings: {str(e)}")
 
 
 def save_settings(settings: Settings) -> None:
     """Save settings to JSON file"""
+    global _SETTINGS_CACHE, _SETTINGS_MTIME
     try:
         # Ensure directory exists
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(settings.model_dump(), f, indent=2, ensure_ascii=False)
+        content = json.dumps(settings.model_dump(), indent=2, ensure_ascii=False)
+        with SETTINGS_FILE.open('w', encoding='utf-8') as f:
+            f.write(content)
+
+        _SETTINGS_CACHE = settings
+        try:
+            _SETTINGS_MTIME = SETTINGS_FILE.stat().st_mtime
+        except OSError:
+            _SETTINGS_MTIME = None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
 
@@ -81,7 +103,7 @@ async def update_settings(updates: SettingsUpdate):
 
 
 @router.post("/reset", response_model=Settings)
-async def reset_settings():
+def reset_settings():
     """
     Reset all settings to defaults
 

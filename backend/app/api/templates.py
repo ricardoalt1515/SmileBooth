@@ -34,6 +34,10 @@ TEMPLATE_ASSETS_DIR = DESIGNS_DIR / "template_assets"
 MAX_FILE_SIZE_MB = 10
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
+# Cache simple en memoria para la DB de templates
+_TEMPLATES_CACHE: dict[str, Template] | None = None
+_TEMPLATES_MTIME: float | None = None
+
 
 # ========== Helper Functions (Pure, no side effects) ==========
 
@@ -77,21 +81,33 @@ def load_templates_db() -> dict[str, Template]:
     """
     Loads all templates from JSON database.
     Returns empty dict if file doesn't exist.
-    
+
     Returns:
         Dictionary mapping template_id -> Template object
     """
+    global _TEMPLATES_CACHE, _TEMPLATES_MTIME
+
     if not TEMPLATES_DB_FILE.exists():
+        _TEMPLATES_CACHE = {}
+        _TEMPLATES_MTIME = None
         return {}
-    
+
     try:
-        with open(TEMPLATES_DB_FILE, 'r', encoding='utf-8') as f:
+        mtime = TEMPLATES_DB_FILE.stat().st_mtime
+        if _TEMPLATES_CACHE is not None and _TEMPLATES_MTIME == mtime:
+            return _TEMPLATES_CACHE
+
+        with TEMPLATES_DB_FILE.open('r', encoding='utf-8') as f:
             data = json.load(f)
             # Convert dict to Template objects
-            return {
+            templates = {
                 tid: Template(**tdata)
                 for tid, tdata in data.items()
             }
+
+        _TEMPLATES_CACHE = templates
+        _TEMPLATES_MTIME = mtime
+        return templates
     except Exception as e:
         print(f"⚠️ Error loading templates DB: {e}")
         return {}
@@ -100,21 +116,30 @@ def load_templates_db() -> dict[str, Template]:
 def save_templates_db(templates: dict[str, Template]) -> None:
     """
     Saves templates to JSON database.
-    
+
     Args:
         templates: Dictionary of templates to save
     """
+    global _TEMPLATES_CACHE, _TEMPLATES_MTIME
+
     # Ensure directory exists
     TEMPLATES_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Convert Template objects to dicts
     data = {
         tid: template.model_dump()
         for tid, template in templates.items()
     }
-    
-    with open(TEMPLATES_DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+    with TEMPLATES_DB_FILE.open('w', encoding='utf-8') as f:
+        f.write(content)
+
+    _TEMPLATES_CACHE = templates
+    try:
+        _TEMPLATES_MTIME = TEMPLATES_DB_FILE.stat().st_mtime
+    except OSError:
+        _TEMPLATES_MTIME = None
 
 
 def deactivate_all_templates(templates: dict[str, Template]) -> None:
@@ -150,7 +175,7 @@ class UploadDesignResponse(BaseModel):
 async def create_template(template_data: TemplateCreate):
     """
     Creates a new template.
-    
+
     Flow:
     1. Generate unique ID
     2. Create Template object
@@ -160,7 +185,7 @@ async def create_template(template_data: TemplateCreate):
     try:
         # Generate ID
         template_id = generate_template_id()
-        
+
         # Create template object
         template = Template(
             id=template_id,
@@ -169,21 +194,22 @@ async def create_template(template_data: TemplateCreate):
             design_position=template_data.design_position,
             background_color=template_data.background_color,
             photo_spacing=template_data.photo_spacing,
+            photo_filter=template_data.photo_filter,
             is_active=False,
             created_at=datetime.now().isoformat(),
         )
-        
+
         # Load existing templates
         templates = load_templates_db()
-        
+
         # Add new template
         templates[template_id] = template
-        
+
         # Save
         save_templates_db(templates)
-        
+
         return template
-        
+
     except Exception as e:
         raise HTTPException(500, f"Error creating template: {str(e)}")
 
@@ -192,27 +218,27 @@ async def create_template(template_data: TemplateCreate):
 async def list_templates():
     """
     Lists all available templates.
-    
+
     Returns:
         List of templates and the currently active one
     """
     try:
         templates = load_templates_db()
-        
+
         # Convert to list
         template_list = list(templates.values())
-        
+
         # Sort by creation date (newest first)
         template_list.sort(key=lambda t: t.created_at, reverse=True)
-        
+
         # Find active template
         active = next((t for t in template_list if t.is_active), None)
-        
+
         return TemplatesListResponse(
             templates=template_list,
             active_template=active
         )
-        
+
     except Exception as e:
         raise HTTPException(500, f"Error listing templates: {str(e)}")
 
@@ -221,22 +247,22 @@ async def list_templates():
 async def get_template(template_id: str):
     """
     Gets a specific template by ID.
-    
+
     Args:
         template_id: The template ID
-        
+
     Returns:
         Template object
     """
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         return templates[template_id]
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -248,33 +274,33 @@ async def update_template(template_id: str, updates: TemplateUpdate):
     """
     Updates an existing template.
     Only updates provided fields (partial update).
-    
+
     Args:
         template_id: The template ID
         updates: Fields to update
-        
+
     Returns:
         Updated template
     """
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         template = templates[template_id]
-        
+
         # Update only provided fields
         update_data = updates.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(template, field, value)
-        
+
         # Save
         save_templates_db(templates)
-        
+
         return template
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -286,35 +312,35 @@ async def activate_template(template_id: str):
     """
     Activates a template (sets is_active=True).
     Deactivates all other templates.
-    
+
     Args:
         template_id: The template ID to activate
-        
+
     Returns:
         Success message with activated template
     """
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         # Deactivate all
         deactivate_all_templates(templates)
-        
+
         # Activate this one
         templates[template_id].is_active = True
-        
+
         # Save
         save_templates_db(templates)
-        
+
         return {
             "success": True,
             "message": f"Template '{templates[template_id].name}' activated",
             "template": templates[template_id]
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -328,27 +354,27 @@ async def upload_template_design(
 ):
     """
     Uploads a design file (PNG from Canva) for a template.
-    
+
     Flow:
     1. Validate file
     2. Save to template_assets directory
     3. Update template with file path
     4. Return success
-    
+
     Args:
         template_id: The template ID
         file: The uploaded design file
-        
+
     Returns:
         Upload response with file path
     """
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if template not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         # Validate file
         is_valid, error = validate_image_file(
             file.filename or "design.png",
@@ -356,43 +382,43 @@ async def upload_template_design(
         )
         if not is_valid:
             raise HTTPException(400, error)
-        
+
         # Create assets directory
         TEMPLATE_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         # Generate filename
         ext = Path(file.filename or "design.png").suffix
         filename = f"{template_id}_design{ext}"
         file_path = TEMPLATE_ASSETS_DIR / filename
-        
+
         # Save file
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         # Resize if needed (standard size)
         img = Image.open(file_path)
         target_size = (600, 450)
-        
+
         if img.size != target_size:
             img_resized = img.resize(target_size, Image.Resampling.LANCZOS)
             img_resized.save(file_path, quality=95)
             print(f"ℹ️  Design resized from {img.size} to {target_size}")
-        
+
         img.close()
-        
+
         # Convert to relative path from /data/
         relative_path = "/" + str(file_path.relative_to(DATA_DIR.parent))
-        
+
         # Update template
         templates[template_id].design_file_path = relative_path
         save_templates_db(templates)
-        
+
         return UploadDesignResponse(
             success=True,
             file_path=relative_path,
             message=f"Design uploaded for template '{templates[template_id].name}'"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -403,47 +429,47 @@ async def upload_template_design(
 async def delete_template(template_id: str):
     """
     Deletes a template and its associated design file.
-    
+
     Args:
         template_id: The template ID to delete
-        
+
     Returns:
         Success message
     """
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         template = templates[template_id]
-        
+
         # Fail fast if template is active (business rule)
         if template.is_active:
             raise HTTPException(
-                400, 
+                400,
                 f"Cannot delete active template '{template.name}'. Deactivate it first."
             )
-        
+
         # TODO: Check if template is used by any event/preset
         # This would require checking presets.json for template_id references
-        
+
         # Delete design file if exists
         if template.design_file_path:
             design_path = Path(template.design_file_path)
             if design_path.exists():
                 design_path.unlink()
-        
+
         # Remove from database
         del templates[template_id]
         save_templates_db(templates)
-        
+
         return {
             "success": True,
             "message": f"Template '{template.name}' deleted"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -454,22 +480,22 @@ async def delete_template(template_id: str):
 async def get_template_preview(template_id: str):
     """
     Serves the design image for a template.
-    
+
     Args:
         template_id: The template ID
-        
+
     Returns:
         Design image file
     """
     from fastapi.responses import FileResponse
-    
+
     try:
         templates = load_templates_db()
-        
+
         # Fail fast if not found
         if template_id not in templates:
             raise HTTPException(404, f"Template not found: {template_id}")
-        
+
         template = templates[template_id]
 
         # Check if has design
@@ -488,7 +514,7 @@ async def get_template_preview(template_id: str):
             media_type=f"image/{design_path.suffix[1:]}",
             headers={"Cache-Control": "public, max-age=3600"}
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

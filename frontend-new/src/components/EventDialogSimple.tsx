@@ -371,27 +371,51 @@ export default function EventDialogSimple({
           </div>
 
           {/* Filtro de fotos */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label htmlFor="photo_filter">Filtro de fotos</Label>
-            <Select
-              value={formData.photo_filter}
-              onValueChange={(value: PhotoFilter) =>
-                setFormData({ ...formData, photo_filter: value })
-              }
-            >
-              <SelectTrigger id="photo_filter">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin filtro</SelectItem>
-                <SelectItem value="bw">Blanco y negro</SelectItem>
-                <SelectItem value="sepia">Sepia cálido</SelectItem>
-                <SelectItem value="glam">Glam (B&N suave)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              El filtro se aplica solo a las fotos, tu diseño de Canva se mantiene igual.
-            </p>
+            <div className="grid grid-cols-[1.6fr,1fr] gap-4 items-center">
+              <div className="space-y-2">
+                <Select
+                  value={formData.photo_filter}
+                  onValueChange={(value: PhotoFilter) =>
+                    setFormData({ ...formData, photo_filter: value })
+                  }
+                >
+                  <SelectTrigger id="photo_filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin filtro</SelectItem>
+                    <SelectItem value="bw">Blanco y negro</SelectItem>
+                    <SelectItem value="sepia">Sepia cálido</SelectItem>
+                    <SelectItem value="glam">Glam (belleza suave)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  El filtro se aplica solo a las fotos, tu diseño de Canva se mantiene igual.
+                </p>
+              </div>
+
+              {/* Preview rápido del filtro seleccionado */}
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-24 h-24 rounded-lg border bg-cover bg-center"
+                  style={{
+                    backgroundImage:
+                      'url(https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=200)',
+                    filter:
+                      formData.photo_filter === 'bw'
+                        ? 'grayscale(100%)'
+                        : formData.photo_filter === 'sepia'
+                          ? 'sepia(100%)'
+                          : formData.photo_filter === 'glam'
+                            ? 'brightness(1.1) contrast(1.1) saturate(1.2)'
+                            : 'none',
+                  }}
+                />
+                <span className="text-[11px] text-muted-foreground">Preview rápido</span>
+              </div>
+            </div>
           </div>
 
           {/* Info del Cliente */}

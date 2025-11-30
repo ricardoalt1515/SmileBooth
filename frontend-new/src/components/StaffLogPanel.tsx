@@ -32,10 +32,12 @@ export default function StaffLogPanel() {
     }
   }, []);
 
+  // Load jobs on mount and poll every 60s (reduced from 15s to minimize load)
   useEffect(() => {
     void loadJobs();
 
-    const interval = setInterval(loadJobs, 15000);
+    // Reduced polling frequency from 15s to 60s to reduce backend load
+    const interval = setInterval(loadJobs, 60000);
     return () => clearInterval(interval);
   }, [loadJobs]);
 

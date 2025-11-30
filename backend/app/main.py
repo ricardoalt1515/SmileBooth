@@ -21,6 +21,7 @@ from app.api import (
     presets,
     templates,
     sessions,
+    config_api,
 )
 from app.config import API_CONFIG
 
@@ -31,9 +32,23 @@ async def lifespan(app: FastAPI):
     Lifecycle events - Limpiar memoria al iniciar y cerrar
     """
     # Startup
-    print("🚀 PhotoBooth API iniciando...")
+    from app.logging_config import logger
+    from app.services.print_queue import PrintQueueService
+    from app.services.image_jobs import ImageJobQueueService
+
+    logger.info("🚀 PhotoBooth API iniciando...")
     print(f"📡 Servidor: http://{API_CONFIG['host']}:{API_CONFIG['port']}")
     gc.collect()  # Limpiar memoria al inicio
+
+    # Limpieza ligera de colas persistentes al arranque
+    try:
+      PrintQueueService.cleanup_old_jobs()
+    except Exception:
+      logger.warning("No se pudo limpiar print_jobs al iniciar")
+    try:
+      ImageJobQueueService.cleanup_old_jobs()
+    except Exception:
+      logger.warning("No se pudo limpiar image_jobs al iniciar")
     
     yield
     
@@ -71,6 +86,7 @@ app.include_router(settings.router)
 app.include_router(gallery.router)
 app.include_router(presets.router)
 app.include_router(sessions.router)
+app.include_router(config_api.router)
 
 # Servir archivos estáticos (fotos capturadas)
 # Las fotos se guardan en /photobooth/data/ (raíz del proyecto, no en backend/data/)
@@ -100,6 +116,101 @@ async def health():
             "image": "/api/image"
         }
     }
+
+
+@app.get("/api/health/full")
+async def full_health(include_camera: bool = False):
+    """Health check extendido con estado de impresora y cola de trabajos.
+
+    La cámara ahora es responsabilidad del renderer; este endpoint solo reporta
+    cámaras detectables desde el backend como diagnóstico opcional.
+
+    Para evitar contención con el renderer (único dueño de la cámara), el
+    escaneo de cámaras solo se realiza cuando ``include_camera=true``.
+    """
+    from app.services.print_service import PrintService
+    from app.services.print_queue import PrintQueueService
+    from app.services.camera_service import CameraService
+
+    result: dict[str, object] = {
+        "backend": {
+            "status": "ok",
+            "message": "API funcionando",
+            "version": "1.0.0",
+        }
+    }
+
+    # Estado de cámara (diagnóstico ligero, opcional)
+    if include_camera:
+        try:
+            cameras = CameraService.get_available_cameras()
+            if cameras:
+                result["camera"] = {
+                    "status": "ok",
+                    "available_cameras": cameras,
+                    "message": f"{len(cameras)} cámara(s) detectada(s)",
+                }
+            else:
+                result["camera"] = {
+                    "status": "error",
+                    "available_cameras": [],
+                    "message": "No se detectaron cámaras desde backend",
+                }
+        except Exception as exc:  # pragma: no cover - solo diagnóstico
+            result["camera"] = {
+                "status": "error",
+                "available_cameras": [],
+                "message": f"Error al listar cámaras: {exc}",
+            }
+
+    # Estado de impresoras
+    try:
+        printers = PrintService.get_available_printers()
+        default_printer = PrintService.get_default_printer()
+        status = "ok" if printers else "error"
+        message = (
+            f"{len(printers)} impresora(s) - {default_printer or 'Sin predeterminada'}"
+            if printers
+            else "No se detectaron impresoras"
+        )
+        result["printer"] = {
+            "status": status,
+            "printers": printers,
+            "default_printer": default_printer,
+            "message": message,
+        }
+    except Exception as exc:  # pragma: no cover - dependiente de SO
+        result["printer"] = {
+            "status": "error",
+            "printers": [],
+            "default_printer": None,
+            "message": f"Error al detectar impresoras: {exc}",
+        }
+
+    # Estado de cola de impresión
+    try:
+        PrintQueueService.cleanup_old_jobs()
+        jobs = PrintQueueService.list_jobs(limit=50)
+        total_jobs = len(jobs)
+        failed_jobs = len([j for j in jobs if j.status == "failed"])
+        last_job = jobs[0].to_dict() if jobs else None
+        last_failed = next((j.to_dict() for j in jobs if j.status == "failed"), None)
+        result["print_queue"] = {
+            "total_jobs": total_jobs,
+            "failed_jobs": failed_jobs,
+            "last_job": last_job,
+            "last_failed": last_failed,
+        }
+    except Exception as exc:
+        result["print_queue"] = {
+            "total_jobs": 0,
+            "failed_jobs": 0,
+            "last_job": None,
+            "last_failed": None,
+            "error": f"Error al leer cola de impresión: {exc}",
+        }
+
+    return result
 
 
 if __name__ == "__main__":

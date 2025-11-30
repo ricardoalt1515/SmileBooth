@@ -118,8 +118,15 @@ async def reprint_session(session_id: str, request: SessionReprintRequest):
         raise HTTPException(404, f"Archivo no encontrado: {resolved_path}")
 
     printer_name = request.printer_name or PrintService.get_default_printer()
+    
+    # Fallback de seguridad si aún así es None o vacío
     if not printer_name:
-        raise HTTPException(400, "No hay impresora configurada para reimpresión")
+        print("⚠️ No printer found for reprint, using Virtual Fallback")
+        printer_name = "Virtual_Printer_Fallback"
+
+    # Ya no lanzamos 400 aquí, permitimos que PrintService maneje el fallback o error interno
+    # if not printer_name:
+    #    raise HTTPException(400, "No hay impresora configurada para reimpresión")
 
     success = PrintService.print_image(resolved_path, printer_name, request.copies)
     if not success:

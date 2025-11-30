@@ -39,9 +39,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import EventsManager from '../components/EventsManager';
 import TemplatesManager from '../components/TemplatesManager';
 import StripPreview from '../components/StripPreview';
+import VoiceSelector from '../components/VoiceSelector';
+import type { Template } from '../types/template';
+import { getLayoutPhotoCount, LAYOUT_LABELS } from '../types/template';
 
 const TAB_PANEL_CLASS = 'space-y-6 max-h-[calc(100vh-220px)] overflow-y-auto pr-3 w-full';
 const UI_PREF_STORAGE_KEY = 'photobooth_ui_preferences';
@@ -96,6 +98,9 @@ export default function SettingsScreen() {
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Active template info (para mostrar ayuda sobre fotos esperadas por diseño)
+  const [activeTemplate, setActiveTemplate] = useState<Template | null>(null);
+
   // Dialog states
   const [showResetDialog, setShowResetDialog] = useState(false);
 
@@ -141,6 +146,18 @@ export default function SettingsScreen() {
           mirrorPreview: settings.mirror_preview ?? mirrorPreview,
           kioskMode: settings.kiosk_mode ?? kioskMode,
         });
+
+        // Cargar template activo (si hay) para ayuda visual en General
+        if (settings.active_template_id) {
+          try {
+            const tpl = await photoboothAPI.templates.get(settings.active_template_id);
+            setActiveTemplate(tpl);
+          } catch (e) {
+            console.error('No se pudo cargar el template activo para ayuda de fotos:', e);
+          }
+        } else {
+          setActiveTemplate(null);
+        }
       } catch (error) {
         console.error('Error loading settings:', error);
         setSaveMessage({ type: 'error', text: 'Error cargando configuración' });
@@ -307,19 +324,23 @@ export default function SettingsScreen() {
 
       {/* Header */}
       <div className="max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-4 mb-2">
           <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-3xl font-bold">Configuración</h1>
         </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Flujo recomendado: <strong>1)</strong> pestaña <strong>Diseños</strong> para elegir el look (layout, marco, filtro),{' '}
+          <strong>2)</strong> pestaña <strong>General</strong> para ajustar comportamiento (fotos, countdown, audio),{' '}
+          <strong>3)</strong> cerrar y probar la cabina.
+        </p>
 
         {/* Save Message */}
         {saveMessage && (
           <div
-            className={`mb-6 p-4 rounded-lg ${
-              saveMessage.type === 'success'
-                ? 'bg-green-600/20 text-green-400 border border-green-600'
-                : 'bg-red-600/20 text-red-400 border border-red-600'
-            }`}
+            className={`mb-6 p-4 rounded-lg ${saveMessage.type === 'success'
+              ? 'bg-green-600/20 text-green-400 border border-green-600'
+              : 'bg-red-600/20 text-red-400 border border-red-600'
+              }`}
           >
             {saveMessage.text}
           </div>
@@ -327,17 +348,13 @@ export default function SettingsScreen() {
 
         {/* shadcn Tabs */}
         <Tabs
-          defaultValue="events"
+          defaultValue="templates"
           className="w-full flex-1 flex flex-col overflow-hidden"
           onValueChange={(value) => {
             if (value === 'printing') loadPrinters();
           }}
         >
-          <TabsList className="grid w-full grid-cols-4 mb-8">
-            <TabsTrigger value="events" className="gap-2">
-              <Calendar className="w-4 h-4" />
-              Eventos
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value="templates" className="gap-2">
               <Palette className="w-4 h-4" />
               Diseños
@@ -352,27 +369,23 @@ export default function SettingsScreen() {
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB: EVENTOS */}
-          <TabsContent value="events" className={TAB_PANEL_CLASS}>
-            <EventsManager 
-              onEventActivated={async (preset) => {
-                // Recargar settings del backend cuando se activa un evento
-                try {
-                  const settings = await photoboothAPI.settings.get();
-                  loadSettings(settings);
-                  toast.success(`Evento "${preset.name}" activado`);
-                } catch (error) {
-                  console.error('Error reloading settings:', error);
-                }
-              }}
-            />
-          </TabsContent>
-
           {/* TAB: TEMPLATES */}
           <TabsContent value="templates" className={TAB_PANEL_CLASS}>
-            <TemplatesManager 
-              onTemplateActivated={(template) => {
-                toast.success(`Template "${template.name}" activado`);
+            <TemplatesManager
+              onTemplateActivated={async (template) => {
+                try {
+                  const filter = (template.photo_filter as any) || 'none';
+                  setActiveTemplate(template);
+                  const updatedSettings = await photoboothAPI.settings.update({
+                    active_template_id: template.id,
+                    photo_filter: filter,
+                  });
+                  loadSettings(updatedSettings);
+                  toast.success(`Template "${template.name}" activado`);
+                } catch (error) {
+                  console.error('Error sincronizando filtro del template:', error);
+                  toast.error('Template activado, pero no se pudo guardar el filtro en configuración');
+                }
               }}
             />
           </TabsContent>
@@ -385,7 +398,9 @@ export default function SettingsScreen() {
               <Card>
                 <CardHeader>
                   <CardTitle>Cantidad de fotos</CardTitle>
-                  <CardDescription>Fotos por sesión</CardDescription>
+                  <CardDescription>
+                    Paso 2: define cuántas fotos tomará la cabina por sesión.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Select
@@ -405,6 +420,30 @@ export default function SettingsScreen() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {activeTemplate && (
+                    <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                      <p>
+                        Diseño activo:{' '}
+                        <span className="font-medium">
+                          {LAYOUT_LABELS[activeTemplate.layout]}
+                        </span>{' '}
+                        (
+                        {getLayoutPhotoCount(activeTemplate.layout)}{' '}
+                        {getLayoutPhotoCount(activeTemplate.layout) === 1
+                          ? 'foto esperada'
+                          : 'fotos esperadas'}
+                        )
+                      </p>
+                      {getLayoutPhotoCount(activeTemplate.layout) !== formData.photos_to_take && (
+                        <p className="text-amber-500">
+                          Este diseño está pensado para{' '}
+                          {getLayoutPhotoCount(activeTemplate.layout)}{' '}
+                          {getLayoutPhotoCount(activeTemplate.layout) === 1 ? 'foto' : 'fotos'}, pero
+                          actualmente tomarás {formData.photos_to_take}.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -428,16 +467,16 @@ export default function SettingsScreen() {
                         setFormData({ ...formData, countdown_seconds: value[0] })
                       }
                       min={3}
-                    max={10}
-                    step={1}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-gray-400">
-                    Rango: 3-10 segundos
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                      max={10}
+                      step={1}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-400">
+                      Rango: 3-10 segundos
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Pantalla y modo espejo */}
@@ -539,91 +578,106 @@ export default function SettingsScreen() {
 
             {/* Voice Settings (if enabled) */}
             {formData.audio_enabled && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Velocidad</CardTitle>
-                    <CardDescription>Ritmo de voz</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Velocidad</Label>
-                      <span className="text-xl font-bold text-primary">
-                        {formData.voice_rate.toFixed(1)}x
-                      </span>
-                    </div>
-                    <Slider
-                      value={[formData.voice_rate]}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, voice_rate: value[0] })
-                      }
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0.5x - 2.0x
-                    </p>
-                  </CardContent>
-                </Card>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Velocidad</CardTitle>
+                      <CardDescription>Ritmo de voz</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Velocidad</Label>
+                        <span className="text-xl font-bold text-primary">
+                          {formData.voice_rate.toFixed(1)}x
+                        </span>
+                      </div>
+                      <Slider
+                        value={[formData.voice_rate]}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, voice_rate: value[0] })
+                        }
+                        min={0.5}
+                        max={2}
+                        step={0.1}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        0.5x - 2.0x
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tono</CardTitle>
-                    <CardDescription>Grave/Agudo</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Tono</Label>
-                      <span className="text-xl font-bold text-primary">
-                        {formData.voice_pitch.toFixed(1)}x
-                      </span>
-                    </div>
-                    <Slider
-                      value={[formData.voice_pitch]}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, voice_pitch: value[0] })
-                      }
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0.5x - 2.0x
-                    </p>
-                  </CardContent>
-                </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Tono</CardTitle>
+                      <CardDescription>Grave/Agudo</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Tono</Label>
+                        <span className="text-xl font-bold text-primary">
+                          {formData.voice_pitch.toFixed(1)}x
+                        </span>
+                      </div>
+                      <Slider
+                        value={[formData.voice_pitch]}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, voice_pitch: value[0] })
+                        }
+                        min={0.5}
+                        max={2}
+                        step={0.1}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        0.5x - 2.0x
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Volumen</CardTitle>
-                    <CardDescription>Nivel de audio</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Nivel</Label>
-                      <span className="text-xl font-bold text-primary">
-                        {Math.round(formData.voice_volume * 100)}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={[formData.voice_volume]}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, voice_volume: value[0] })
-                      }
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0% - 100%
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Volumen</CardTitle>
+                      <CardDescription>Nivel de audio</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Nivel</Label>
+                        <span className="text-xl font-bold text-primary">
+                          {Math.round(formData.voice_volume * 100)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[formData.voice_volume]}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, voice_volume: value[0] })
+                        }
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        0% - 100%
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Voice Selector */}
+                <div className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Voz del Asistente</CardTitle>
+                      <CardDescription>Elige la voz del sistema que guiará a los invitados</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <VoiceSelector />
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
             )}
 
             {/* Layout Configuration */}
@@ -633,7 +687,7 @@ export default function SettingsScreen() {
                 Normalmente personalizarás el look de las tiras desde la pestaña <strong>Diseños</strong>.
                 Estos ajustes sirven como base o cuando no hay un Template activo.
               </p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Tipo de Layout */}
                 <Card>
@@ -812,11 +866,10 @@ export default function SettingsScreen() {
                   {printers.map((printer) => (
                     <label
                       key={printer}
-                      className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedPrinter === printer
-                          ? 'border-[#ff0080] bg-[#ff0080]/10'
-                          : 'border-gray-700 hover:border-gray-600'
-                      }`}
+                      className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedPrinter === printer
+                        ? 'border-[#ff0080] bg-[#ff0080]/10'
+                        : 'border-gray-700 hover:border-gray-600'
+                        }`}
                     >
                       <input
                         type="radio"

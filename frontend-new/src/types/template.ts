@@ -40,6 +40,7 @@ export interface Template {
   design_position: DesignPositionType;
   background_color: string;
   photo_spacing: number;
+  photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
   is_active: boolean;
   created_at: string;
   preview_url: string | null;
@@ -54,6 +55,7 @@ export interface TemplateCreate {
   design_position: DesignPositionType;
   background_color: string;
   photo_spacing: number;
+  photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
 }
 
 /**
@@ -66,6 +68,7 @@ export interface TemplateUpdate {
   design_position?: DesignPositionType;
   background_color?: string;
   photo_spacing?: number;
+  photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
 }
 
 /**

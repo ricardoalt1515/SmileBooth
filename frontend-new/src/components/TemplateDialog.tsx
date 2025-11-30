@@ -68,6 +68,7 @@ interface FormData {
   design_position: DesignPositionType;
   background_color: string;
   photo_spacing: number;
+  photo_filter: 'none' | 'bw' | 'sepia' | 'glam';
 }
 
 interface ValidationError {
@@ -100,6 +101,7 @@ export default function TemplateDialog({
       design_position: DESIGN_POSITION_BOTTOM,
       background_color: DEFAULT_BACKGROUND_COLOR,
       photo_spacing: DEFAULT_PHOTO_SPACING,
+      photo_filter: 'none',
     };
   }
 
@@ -113,6 +115,7 @@ export default function TemplateDialog({
         design_position: editingTemplate.design_position,
         background_color: editingTemplate.background_color,
         photo_spacing: editingTemplate.photo_spacing,
+        photo_filter: (editingTemplate.photo_filter as FormData['photo_filter']) || 'none',
       });
       
       // Set preview if has design
@@ -281,6 +284,7 @@ export default function TemplateDialog({
           design_position: formData.design_position,
           background_color: formData.background_color,
           photo_spacing: formData.photo_spacing,
+          photo_filter: formData.photo_filter,
         };
         
         const newTemplate = await photoboothAPI.templates.create(templateData);
@@ -459,6 +463,30 @@ export default function TemplateDialog({
                 })}
                 className={errors.find(e => e.field === 'photo_spacing') ? 'border-destructive' : ''}
               />
+            </div>
+
+            {/* Photo Filter (look de las fotos) */}
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="photo_filter" className="text-sm font-medium">Filtro de fotos</Label>
+              <Select
+                value={formData.photo_filter}
+                onValueChange={(value: FormData['photo_filter']) =>
+                  setFormData({ ...formData, photo_filter: value })
+                }
+              >
+                <SelectTrigger id="photo_filter" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin filtro</SelectItem>
+                  <SelectItem value="bw">Blanco y negro</SelectItem>
+                  <SelectItem value="sepia">Sepia cálido</SelectItem>
+                  <SelectItem value="glam">Glam / Belleza suave</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Este filtro se aplicará a las fotos de este diseño en cámara, preview y tira final.
+              </p>
             </div>
           </div>
 

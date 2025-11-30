@@ -73,7 +73,7 @@ export default function SuccessScreen() {
     try {
       setIsPrinting(true);
       speak('Enviando a impresora. Espera un momento.', { rate: 1.1 });
-      
+
       // 1) Intentar reimpresión basada en sesión (para tracking y metadata)
       if (sessionId) {
         try {

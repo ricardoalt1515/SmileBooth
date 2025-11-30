@@ -14,7 +14,12 @@ interface DeviceStatusState {
   failedPrintJobs: number;
 }
 
-export function useDeviceStatus() {
+interface UseDeviceStatusOptions {
+  enabled?: boolean;
+}
+
+export function useDeviceStatus(options: UseDeviceStatusOptions = {}) {
+  const { enabled = true } = options;
   const [status, setStatus] = useState<DeviceStatusState>({
     cameraStatus: 'unknown',
     printerStatus: 'unknown',
@@ -27,114 +32,71 @@ export function useDeviceStatus() {
     failedPrintJobs: 0,
   });
 
-  const checkCameraStatus = useCallback(async () => {
+  // Use useCallback ONCE for the main check function, with NO dependencies
+  // This function is stable and won't cause re-renders
+  const checkAllDevices = useCallback(async () => {
     try {
-      // Intentar obtener lista de cámaras
-      const cameras = await photoboothAPI.camera.list();
-      if (cameras && cameras.length > 0) {
-        setStatus((prev) => ({
-          ...prev,
-          cameraStatus: 'ok',
-          cameraDetails: `${cameras.length} cámara(s) detectada(s)`,
-        }));
-      } else {
-        setStatus((prev) => ({
-          ...prev,
-          cameraStatus: 'error',
-          cameraDetails: 'No se detectaron cámaras',
-        }));
-      }
-    } catch (error) {
-      setStatus((prev) => ({
-        ...prev,
-        cameraStatus: 'error',
-        cameraDetails: 'Error al conectar con cámara',
-      }));
-    }
-  }, []);
+      const data = await photoboothAPI.fullHealth({ includeCamera: true });
 
-  const checkPrinterStatus = useCallback(async () => {
-    try {
-      // Intentar obtener lista de impresoras
-      const response = await photoboothAPI.print.listPrinters();
-      if (response && response.printers && response.printers.length > 0) {
-        setStatus((prev) => ({
-          ...prev,
-          printerStatus: 'ok',
-          printerDetails: `${response.printers.length} impresora(s) - ${response.default_printer || 'Sin predeterminada'}`,
-        }));
-      } else {
-        setStatus((prev) => ({
-          ...prev,
-          printerStatus: 'error',
-          printerDetails: 'No se detectaron impresoras',
-        }));
-      }
+      const cameraStatus: DeviceStatus = data.camera?.status === 'ok'
+        ? 'ok'
+        : data.camera?.status === 'error'
+          ? 'error'
+          : 'unknown';
 
-      // Consultar últimos jobs por si hay fallos recientes
-      const jobs = await photoboothAPI.print.listJobs();
-      const lastFailed = jobs.find((job: any) => job.status === 'failed');
-      const failedCount = jobs.filter((job: any) => job.status === 'failed').length;
-      setStatus((prev) => ({
-        ...prev,
-        lastPrintJobError: lastFailed?.error || null,
-        lastPrintJobId: lastFailed?.job_id || null,
-        failedPrintJobs: failedCount,
-      }));
-    } catch (error) {
-      setStatus((prev) => ({
-        ...prev,
-        printerStatus: 'error',
-        printerDetails: 'Error al conectar con impresora',
-        lastPrintJobError: prev.lastPrintJobError,
-        lastPrintJobId: prev.lastPrintJobId,
-        failedPrintJobs: prev.failedPrintJobs,
-      }));
-    }
-  }, []);
+      const printerStatus: DeviceStatus = data.printer?.status === 'ok'
+        ? 'ok'
+        : data.printer?.status === 'error'
+          ? 'error'
+          : 'unknown';
 
-  const checkBackendStatus = useCallback(async () => {
-    try {
-      // Ping al backend obteniendo settings
-      await photoboothAPI.settings.get();
+      const backendStatus: DeviceStatus = data.backend?.status === 'ok'
+        ? 'ok'
+        : 'error';
+
       setStatus((prev) => ({
         ...prev,
-        backendStatus: 'ok',
-        backendDetails: 'Conectado',
+        cameraStatus,
+        cameraDetails: data.camera?.message || (cameraStatus === 'ok' ? 'Cámara lista (renderer)' : 'Estado de cámara desconocido'),
+        printerStatus,
+        printerDetails: data.printer?.message || (printerStatus === 'ok' ? 'Impresora lista' : 'Error al detectar impresora'),
+        backendStatus,
+        backendDetails: data.backend?.message || (backendStatus === 'ok' ? 'Conectado' : 'Backend no responde'),
+        lastPrintJobError: data.print_queue?.last_failed?.error || null,
+        lastPrintJobId: data.print_queue?.last_failed?.job_id || null,
+        failedPrintJobs: data.print_queue?.failed_jobs ?? 0,
       }));
     } catch (error) {
       setStatus((prev) => ({
         ...prev,
         backendStatus: 'error',
-        backendDetails: 'Backend no responde',
+        backendDetails: 'Error al obtener estado de backend',
+        printerStatus: prev.printerStatus === 'unknown' ? 'error' : prev.printerStatus,
+        printerDetails: prev.printerDetails === 'Verificando...'
+          ? 'Error al obtener estado de impresora'
+          : prev.printerDetails,
       }));
     }
-  }, []);
+  }, []); // Empty dependency array - function is stable
 
-  const checkAllDevices = useCallback(async () => {
-    await Promise.all([
-      checkCameraStatus(),
-      checkPrinterStatus(),
-      checkBackendStatus(),
-    ]);
-  }, [checkCameraStatus, checkPrinterStatus, checkBackendStatus]);
-
-  // Check inicial
+  // Check inicial + polling cada 60 segundos (increased from 30s)
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     checkAllDevices();
-  }, [checkAllDevices]);
 
-  // Polling cada 30 segundos
-  useEffect(() => {
     const interval = setInterval(() => {
       checkAllDevices();
-    }, 30000); // 30s
+    }, 60000); // 60s
 
     return () => clearInterval(interval);
-  }, [checkAllDevices]);
+  }, [enabled, checkAllDevices]);
 
   return {
     ...status,
-    refresh: checkAllDevices,
+    refresh: () => (enabled ? checkAllDevices() : Promise.resolve()),
+    pollingEnabled: enabled,
   };
 }

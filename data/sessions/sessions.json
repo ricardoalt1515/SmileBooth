@@ -46,7 +46,7 @@
     "strip_path": "/data/photos/preview/strip.jpg",
     "print_jobs": [],
     "created_at": "2025-11-15T15:01:55.447005",
-    "updated_at": "2025-11-16T16:46:52.519655",
+    "updated_at": "2025-11-30T14:17:05.673357",
     "notes": null
   },
   "20251115_150447": {
@@ -563,6 +563,509 @@
     ],
     "created_at": "2025-11-16T16:46:28.113650",
     "updated_at": "2025-11-16T16:47:02.310276",
+    "notes": null
+  },
+  "20251118_125549": {
+    "session_id": "20251118_125549",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251118_125549/shot-1.jpg",
+        "url": "/data/photos/20251118_125549/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251118_125549/thumb-1.jpg",
+        "captured_at": "2025-11-18T12:55:49.768810"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251118_125549/shot-2.jpg",
+        "url": "/data/photos/20251118_125549/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251118_125549/thumb-2.jpg",
+        "captured_at": "2025-11-18T12:55:57.322555"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251118_125549/shot-3.jpg",
+        "url": "/data/photos/20251118_125549/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251118_125549/thumb-3.jpg",
+        "captured_at": "2025-11-18T12:56:04.886222"
+      }
+    ],
+    "strip_path": "/data/photos/20251118_125549/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-11-18T12:55:49.769065",
+    "updated_at": "2025-11-18T12:56:19.361793",
+    "notes": null
+  },
+  "20251118_130117": {
+    "session_id": "20251118_130117",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251118_130117/shot-1.jpg",
+        "url": "/data/photos/20251118_130117/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251118_130117/thumb-1.jpg",
+        "captured_at": "2025-11-18T13:01:17.519766"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251118_130117/shot-2.jpg",
+        "url": "/data/photos/20251118_130117/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251118_130117/thumb-2.jpg",
+        "captured_at": "2025-11-18T13:01:25.211018"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251118_130117/shot-3.jpg",
+        "url": "/data/photos/20251118_130117/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251118_130117/thumb-3.jpg",
+        "captured_at": "2025-11-18T13:01:32.910876"
+      }
+    ],
+    "strip_path": "/data/photos/20251118_130117/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-11-18T13:01:17.520026",
+    "updated_at": "2025-11-18T13:01:47.442763",
+    "notes": null
+  },
+  "20251118_131324": {
+    "session_id": "20251118_131324",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251118_131324/shot-1.jpg",
+        "url": "/data/photos/20251118_131324/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251118_131324/thumb-1.jpg",
+        "captured_at": "2025-11-18T13:13:24.228511"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251118_131324/shot-2.jpg",
+        "url": "/data/photos/20251118_131324/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251118_131324/thumb-2.jpg",
+        "captured_at": "2025-11-18T13:13:31.919055"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251118_131324/shot-3.jpg",
+        "url": "/data/photos/20251118_131324/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251118_131324/thumb-3.jpg",
+        "captured_at": "2025-11-18T13:13:41.081464"
+      }
+    ],
+    "strip_path": "/data/photos/20251118_131324/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251118_144629",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-18T14:46:29.950877",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-18T13:13:24.228791",
+    "updated_at": "2025-11-18T14:46:29.951359",
+    "notes": null
+  },
+  "20251118_144642": {
+    "session_id": "20251118_144642",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251118_144642/shot-1.jpg",
+        "url": "/data/photos/20251118_144642/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251118_144642/thumb-1.jpg",
+        "captured_at": "2025-11-18T14:46:42.606522"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251118_144642/shot-2.jpg",
+        "url": "/data/photos/20251118_144642/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251118_144642/thumb-2.jpg",
+        "captured_at": "2025-11-18T14:46:50.189152"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251118_144642/shot-3.jpg",
+        "url": "/data/photos/20251118_144642/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251118_144642/thumb-3.jpg",
+        "captured_at": "2025-11-18T14:46:57.933905"
+      }
+    ],
+    "strip_path": "/data/photos/20251118_144642/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251118_144716",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-18T14:47:16.470198",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-18T14:46:42.606819",
+    "updated_at": "2025-11-18T14:47:16.470662",
+    "notes": null
+  },
+  "20251118_154641": {
+    "session_id": "20251118_154641",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251118_154641/shot-1.jpg",
+        "url": "/data/photos/20251118_154641/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251118_154641/thumb-1.jpg",
+        "captured_at": "2025-11-18T15:46:41.392729"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251118_154641/shot-2.jpg",
+        "url": "/data/photos/20251118_154641/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251118_154641/thumb-2.jpg",
+        "captured_at": "2025-11-18T15:46:49.022608"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251118_154641/shot-3.jpg",
+        "url": "/data/photos/20251118_154641/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251118_154641/thumb-3.jpg",
+        "captured_at": "2025-11-18T15:46:56.645176"
+      }
+    ],
+    "strip_path": "/data/photos/20251118_154641/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251118_154741",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-18T15:47:41.858183",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-18T15:46:41.393016",
+    "updated_at": "2025-11-18T15:47:41.858626",
+    "notes": null
+  },
+  "20251122_133639": {
+    "session_id": "20251122_133639",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251122_133639/shot-1.jpg",
+        "url": "/data/photos/20251122_133639/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251122_133639/thumb-1.jpg",
+        "captured_at": "2025-11-22T13:36:39.735292"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251122_133639/shot-2.jpg",
+        "url": "/data/photos/20251122_133639/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251122_133639/thumb-2.jpg",
+        "captured_at": "2025-11-22T13:36:47.319383"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251122_133639/shot-3.jpg",
+        "url": "/data/photos/20251122_133639/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251122_133639/thumb-3.jpg",
+        "captured_at": "2025-11-22T13:36:54.881665"
+      }
+    ],
+    "strip_path": "/data/photos/20251122_133639/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251122_133716",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-22T13:37:16.010860",
+        "status": "sent",
+        "error_message": null
+      },
+      {
+        "job_id": "job_20251122_133828",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-22T13:38:28.200179",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-22T13:36:39.735672",
+    "updated_at": "2025-11-22T13:38:28.200814",
+    "notes": null
+  },
+  "20251122_134249": {
+    "session_id": "20251122_134249",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251122_134249/shot-1.jpg",
+        "url": "/data/photos/20251122_134249/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251122_134249/thumb-1.jpg",
+        "captured_at": "2025-11-22T13:42:49.151596"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251122_134249/shot-2.jpg",
+        "url": "/data/photos/20251122_134249/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251122_134249/thumb-2.jpg",
+        "captured_at": "2025-11-22T13:42:56.776850"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251122_134249/shot-3.jpg",
+        "url": "/data/photos/20251122_134249/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251122_134249/thumb-3.jpg",
+        "captured_at": "2025-11-22T13:43:04.404830"
+      }
+    ],
+    "strip_path": "/data/photos/20251122_134249/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251122_134327",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-22T13:43:27.117773",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-22T13:42:49.152111",
+    "updated_at": "2025-11-22T13:43:27.118435",
+    "notes": null
+  },
+  "20251129_101101": {
+    "session_id": "20251129_101101",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251129_101101/shot-1.jpg",
+        "url": "/data/photos/20251129_101101/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251129_101101/thumb-1.jpg",
+        "captured_at": "2025-11-29T10:11:01.893583"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251129_101101/shot-2.jpg",
+        "url": "/data/photos/20251129_101101/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251129_101101/thumb-2.jpg",
+        "captured_at": "2025-11-29T10:11:09.615060"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251129_101101/shot-3.jpg",
+        "url": "/data/photos/20251129_101101/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251129_101101/thumb-3.jpg",
+        "captured_at": "2025-11-29T10:11:17.526357"
+      }
+    ],
+    "strip_path": "/data/photos/20251129_101101/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251129_101141",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-29T10:11:41.645419",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-29T10:11:01.893907",
+    "updated_at": "2025-11-29T10:11:41.645895",
+    "notes": null
+  },
+  "20251129_104056": {
+    "session_id": "20251129_104056",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251129_104056/shot-1.jpg",
+        "url": "/data/photos/20251129_104056/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251129_104056/thumb-1.jpg",
+        "captured_at": "2025-11-29T10:40:56.155001"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251129_104056/shot-2.jpg",
+        "url": "/data/photos/20251129_104056/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251129_104056/thumb-2.jpg",
+        "captured_at": "2025-11-29T10:41:04.446728"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251129_104056/shot-3.jpg",
+        "url": "/data/photos/20251129_104056/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251129_104056/thumb-3.jpg",
+        "captured_at": "2025-11-29T10:41:13.052107"
+      }
+    ],
+    "strip_path": "/data/photos/20251129_104056/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-11-29T10:40:56.156384",
+    "updated_at": "2025-11-29T10:41:31.499839",
+    "notes": null
+  },
+  "20251129_104155": {
+    "session_id": "20251129_104155",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "capturing",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251129_104155/shot-1.jpg",
+        "url": "/data/photos/20251129_104155/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251129_104155/thumb-1.jpg",
+        "captured_at": "2025-11-29T10:41:55.257286"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251129_104155/shot-2.jpg",
+        "url": "/data/photos/20251129_104155/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251129_104155/thumb-2.jpg",
+        "captured_at": "2025-11-29T10:42:02.967983"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251129_104155/shot-3.jpg",
+        "url": "/data/photos/20251129_104155/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251129_104155/thumb-3.jpg",
+        "captured_at": "2025-11-29T10:42:10.707913"
+      }
+    ],
+    "strip_path": null,
+    "print_jobs": [],
+    "created_at": "2025-11-29T10:41:55.258668",
+    "updated_at": "2025-11-29T10:42:10.708354",
+    "notes": null
+  },
+  "20251129_104234": {
+    "session_id": "20251129_104234",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251129_104234/shot-1.jpg",
+        "url": "/data/photos/20251129_104234/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251129_104234/thumb-1.jpg",
+        "captured_at": "2025-11-29T10:42:34.633247"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251129_104234/shot-2.jpg",
+        "url": "/data/photos/20251129_104234/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251129_104234/thumb-2.jpg",
+        "captured_at": "2025-11-29T10:42:43.107698"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251129_104234/shot-3.jpg",
+        "url": "/data/photos/20251129_104234/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251129_104234/thumb-3.jpg",
+        "captured_at": "2025-11-29T10:42:50.846406"
+      }
+    ],
+    "strip_path": "/data/photos/20251129_104234/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-11-29T10:42:34.633684",
+    "updated_at": "2025-11-29T10:43:06.024619",
+    "notes": null
+  },
+  "20251130_141636": {
+    "session_id": "20251130_141636",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251130_141636/shot-1.jpg",
+        "url": "/data/photos/20251130_141636/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251130_141636/thumb-1.jpg",
+        "captured_at": "2025-11-30T14:16:36.831962"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251130_141636/shot-2.jpg",
+        "url": "/data/photos/20251130_141636/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251130_141636/thumb-2.jpg",
+        "captured_at": "2025-11-30T14:16:46.612828"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251130_141636/shot-3.jpg",
+        "url": "/data/photos/20251130_141636/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251130_141636/thumb-3.jpg",
+        "captured_at": "2025-11-30T14:16:56.237856"
+      }
+    ],
+    "strip_path": "/data/photos/20251130_141636/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251130_141714",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-11-30T14:17:14.762983",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-11-30T14:16:36.833360",
+    "updated_at": "2025-11-30T14:17:14.763721",
     "notes": null
   }
 }

@@ -6,10 +6,40 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 import traceback
 from app.services.image_service import ImageService
-from app.schemas.image import ComposeStripRequest, ComposeStripResponse
+from app.services.image_jobs import ImageJobQueueService
+from app.schemas.image import ComposeStripRequest, ComposeStripResponse, ComposeJobResult
 from app.config import DATA_DIR, TEMP_DIR
 
 router = APIRouter(prefix="/api/image", tags=["image"])
+
+
+def _resolve_photo_and_design_paths(request: ComposeStripRequest) -> tuple[list[Path], Path | None]:
+    """Resolve photo_paths and design_path from request into absolute Paths.
+
+    Compartido por los endpoints sin cambiar su contrato externo.
+    """
+    # Convertir paths relativos (/data/photos/...) a absolutos
+    photo_paths: list[Path] = []
+    for p in request.photo_paths:
+        if p.startswith('/data/'):
+            # Path relativo desde /data
+            rel_path = p.replace('/data/', '')
+            abs_path = DATA_DIR / rel_path
+        else:
+            # Path absoluto (legacy)
+            abs_path = Path(p)
+        photo_paths.append(abs_path)
+
+    # Diseño también puede ser relativo
+    design_path: Path | None = None
+    if request.design_path:
+        if request.design_path.startswith('/data/'):
+            rel_path = request.design_path.replace('/data/', '')
+            design_path = DATA_DIR / rel_path
+        else:
+            design_path = Path(request.design_path)
+
+    return photo_paths, design_path
 
 
 @router.post("/compose-strip", response_model=ComposeStripResponse)
@@ -19,26 +49,7 @@ async def compose_strip(request: ComposeStripRequest):
     Optimizado para bajo consumo de memoria.
     """
     try:
-        # Convertir paths relativos (/data/photos/...) a absolutos
-        photo_paths = []
-        for p in request.photo_paths:
-            if p.startswith('/data/'):
-                # Path relativo desde /data
-                rel_path = p.replace('/data/', '')
-                abs_path = DATA_DIR / rel_path
-            else:
-                # Path absoluto (legacy)
-                abs_path = Path(p)
-            photo_paths.append(abs_path)
-        
-        # Diseño también puede ser relativo
-        design_path = None
-        if request.design_path:
-            if request.design_path.startswith('/data/'):
-                rel_path = request.design_path.replace('/data/', '')
-                design_path = DATA_DIR / rel_path
-            else:
-                design_path = Path(request.design_path)
+        photo_paths, design_path = _resolve_photo_and_design_paths(request)
         
         # Validar que existan las fotos
         for photo_path in photo_paths:
@@ -182,3 +193,76 @@ async def preview_strip(request: ComposeStripRequest):
             status_code=500,
             detail=f"Error al generar preview: {str(e)}"
         )
+
+
+@router.post("/jobs/compose", response_model=ComposeJobResult)
+async def compose_strip_job(request: ComposeStripRequest):
+    """Encola y ejecuta un job de composición de tira.
+
+    Primera versión: ejecuta compose_strip en la misma petición pero persiste el
+    resultado en disco junto con un job_id para que el frontend pueda consultar
+    estado sin cambiar el contrato de /compose-strip actual.
+    """
+    # Limpieza ligera antes de registrar el nuevo job para mantener el archivo acotado
+    ImageJobQueueService.cleanup_old_jobs()
+
+    # Registrar job pendiente con el payload crudo del request
+    job = ImageJobQueueService.add_compose_job(request.model_dump())
+
+    try:
+        # Reutilizar la lógica existente de composición
+        result = await compose_strip(request)
+
+        ImageJobQueueService.update_status(
+            job.job_id,
+            status="completed",
+            result=result.model_dump(),
+            error=None,
+        )
+
+        return ComposeJobResult(
+            job_id=job.job_id,
+            status="completed",
+            result=result,
+            error=None,
+        )
+    except HTTPException as http_exc:
+        ImageJobQueueService.update_status(
+            job.job_id,
+            status="failed",
+            result=None,
+            error=str(http_exc.detail),
+        )
+        raise
+    except Exception as exc:
+        ImageJobQueueService.update_status(
+            job.job_id,
+            status="failed",
+            result=None,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail=f"compose_strip job failed: {exc}")
+
+
+@router.get("/jobs/{job_id}", response_model=ComposeJobResult)
+async def get_compose_job(job_id: str):
+    """Devuelve el estado de un job de composición por ID."""
+    job = ImageJobQueueService.get_job(job_id)
+    if job is None or job.job_type != "compose-strip":
+        raise HTTPException(status_code=404, detail=f"Job no encontrado: {job_id}")
+
+    result_model: ComposeStripResponse | None = None
+    if job.result:
+        try:
+            result_model = ComposeStripResponse(**job.result)
+        except Exception:
+            # Si el payload no es válido, exponerlo como error pero no romper el endpoint
+            result_model = None
+
+    return ComposeJobResult(
+        job_id=job.job_id,
+        status=job.status,
+        result=result_model,
+        error=job.error,
+    )
+

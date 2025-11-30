@@ -29,6 +29,10 @@ router = APIRouter(prefix="/api/presets", tags=["presets"])
 # Archivo de persistencia de presets
 PRESETS_FILE = DATA_DIR / "presets.json"
 
+# Cache simple en memoria para evitar reread constantes
+_PRESETS_CACHE: list[EventPreset] | None = None
+_PRESETS_MTIME: float | None = None
+
 
 def resolve_template_metadata(template_id: Optional[str]) -> dict[str, Optional[str]]:
     """
@@ -76,6 +80,8 @@ def activate_template_if_needed(template_id: Optional[str]) -> None:
 
 def load_presets() -> list[EventPreset]:
     """Cargar todos los presets del archivo JSON"""
+    global _PRESETS_CACHE, _PRESETS_MTIME
+
     if not PRESETS_FILE.exists():
         # Crear preset por defecto
         default_preset = EventPreset(
@@ -89,19 +95,34 @@ def load_presets() -> list[EventPreset]:
             auto_reset_seconds=30,
             notes="Configuración base para eventos públicos"
         )
-        save_presets([default_preset])
-        return [default_preset]
-    
+        presets = [default_preset]
+        save_presets(presets)
+        return presets
+
+    mtime = PRESETS_FILE.stat().st_mtime
+    if _PRESETS_CACHE is not None and _PRESETS_MTIME == mtime:
+        return _PRESETS_CACHE
+
     with open(PRESETS_FILE, 'r', encoding='utf-8') as f:
         data = json.load(f)
-        return [EventPreset(**preset) for preset in data]
+        presets = [EventPreset(**preset) for preset in data]
+
+    _PRESETS_CACHE = presets
+    _PRESETS_MTIME = mtime
+    return presets
 
 
 def save_presets(presets: list[EventPreset]) -> None:
     """Guardar presets al archivo JSON"""
+    global _PRESETS_CACHE, _PRESETS_MTIME
     PRESETS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PRESETS_FILE, 'w', encoding='utf-8') as f:
         json.dump([preset.model_dump() for preset in presets], f, indent=2, ensure_ascii=False)
+    _PRESETS_CACHE = presets
+    try:
+        _PRESETS_MTIME = PRESETS_FILE.stat().st_mtime
+    except OSError:
+        _PRESETS_MTIME = None
 
 
 def get_active_preset() -> Optional[EventPreset]:
@@ -120,6 +141,7 @@ def apply_preset_to_settings(preset: EventPreset) -> None:
     """
     settings = load_settings()
 
+    # Map core behavioral settings directly from preset
     settings.photos_to_take = preset.photos_to_take
     settings.countdown_seconds = preset.countdown_seconds
     settings.auto_reset_seconds = preset.auto_reset_seconds
@@ -127,10 +149,24 @@ def apply_preset_to_settings(preset: EventPreset) -> None:
     settings.voice_rate = preset.voice_rate
     settings.voice_pitch = preset.voice_pitch
     settings.voice_volume = preset.voice_volume
+
+    # Link design / template references
     settings.active_design_id = preset.design_id
     settings.active_template_id = preset.template_id
-    settings.photo_filter = preset.photo_filter
-    
+
+    # Determine effective photo filter
+    # Prefer the filter defined in the linked Template (design-level truth),
+    # falling back to the preset's own photo_filter for backwards compatibility
+    effective_filter = preset.photo_filter or "none"
+
+    if preset.template_id:
+        templates = load_templates_db()
+        template = templates.get(preset.template_id)
+        if template and getattr(template, "photo_filter", None):
+            effective_filter = template.photo_filter
+
+    settings.photo_filter = effective_filter
+
     save_settings(settings)
 
 

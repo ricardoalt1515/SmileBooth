@@ -324,11 +324,11 @@ class ImageService:
             return sepia.convert("RGB")
 
         if name == "glam":
-            gray = ImageOps.grayscale(base)
-            glam = gray.convert("RGB")
-            # Ligero realce de brillo y contraste
+            glam = base.copy()
+            # Ligero realce de brillo y contraste en color, consistente con el preview CSS
             glam = ImageEnhance.Brightness(glam).enhance(1.08)
             glam = ImageEnhance.Contrast(glam).enhance(1.12)
+            glam = ImageEnhance.Color(glam).enhance(1.2)
             return glam
 
         # Filtro desconocido: devolver copia directa

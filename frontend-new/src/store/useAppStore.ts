@@ -64,8 +64,10 @@ interface AppState {
   voiceRate: number;
   voicePitch: number;
   voiceVolume: number;
+  selectedVoiceURI: string | null;
   autoResetSeconds: number;
   photoFilter: string;
+  sessionPhotoFilter: string | null;
   mirrorPreview: boolean;
   kioskMode: boolean;
   autoPrint: boolean;
@@ -106,8 +108,11 @@ interface AppState {
     'cameraWidth' |
     'cameraHeight' |
     'printMode' |
-    'paperSize'
+    'paperSize' |
+    'selectedVoiceURI' |
+    'photoFilter'
   >>) => void;
+  setSessionPhotoFilter: (filter: string | null) => void;
 
   // Backend connection
   isBackendConnected: boolean;
@@ -138,8 +143,10 @@ const initialState = {
   voiceRate: 1.0,
   voicePitch: 1.0,
   voiceVolume: 1.0,
+  selectedVoiceURI: null,
   autoResetSeconds: 30,
   photoFilter: 'none',
+  sessionPhotoFilter: null,
   mirrorPreview: false,
   kioskMode: true,
   autoPrint: false,
@@ -209,6 +216,8 @@ export const useAppStore = create<AppState>((set) => ({
   }),
 
   setSettings: (settings) => set(settings),
+
+  setSessionPhotoFilter: (filter) => set({ sessionPhotoFilter: filter }),
 
   setBackendConnected: (connected) => set({ isBackendConnected: connected }),
 

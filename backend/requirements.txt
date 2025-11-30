@@ -19,3 +19,4 @@ pycups
 
 # Utils
 python-dotenv
+aiofiles
