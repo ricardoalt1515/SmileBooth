@@ -335,14 +335,49 @@ export default function GalleryScreen() {
         )}
 
         {/* Actions */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex gap-4 mb-8 items-center">
+
+          {/* Fin de evento: flujo guiado para staff */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={isExporting || photos.length === 0}
+                className="flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#ff0080] to-[#ff8c00] text-white font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-5 h-5" />
+                {isExporting ? 'Exportando...' : 'Cerrar evento y exportar ZIP'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-black/95 border-gray-700 text-white max-w-lg">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cerrar evento y exportar fotos</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-300">
+                  Este paso genera un archivo ZIP con todas las fotos del evento y lo descarga en esta computadora.
+                  {' '}No borra ninguna foto de la galería. Úsalo al terminar el evento para guardar una copia para el cliente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-white/10">
+                  Cancelar
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleExportZip}
+                  className="bg-[#ff0080] hover:bg-[#ff0080]/80 text-white"
+                >
+                  {isExporting ? 'Exportando...' : 'Sí, exportar ZIP del evento'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Export rápido sin confirmación */}
           <button
             onClick={handleExportZip}
             disabled={isExporting || photos.length === 0}
             className="flex items-center gap-2 px-6 py-3 bg-[#ff0080] hover:bg-[#ff0080]/80 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-5 h-5" />
-            {isExporting ? 'Exportando...' : 'Exportar ZIP'}
+            {isExporting ? 'Exportando...' : 'Exportar ZIP rápido'}
           </button>
 
           <button

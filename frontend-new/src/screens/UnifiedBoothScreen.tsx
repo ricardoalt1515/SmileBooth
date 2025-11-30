@@ -696,33 +696,29 @@ export default function UnifiedBoothScreen() {
       )}
 
       {/* SIDEBAR IZQUIERDA: 3 Photo Slots - Enhanced with glassmorphism */}
-      <aside className="w-[25%] min-w-[320px] max-w-[480px] flex flex-col items-center justify-center gap-8 p-8 relative overflow-hidden border-r border-white/5">
-        {/* Animated gradient mesh background */}
+      <aside className="w-72 flex flex-col items-center justify-center gap-6 p-6 relative overflow-hidden border-r border-white/5 bg-black/40 backdrop-blur-md">
+        {/* Animated gradient mesh background - Subtle */}
         <div
-          className="absolute inset-0 opacity-30 pointer-events-none"
+          className="absolute inset-0 opacity-20 pointer-events-none"
           style={{
             background: 'var(--gradient-mesh)',
           }}
         />
-        {/* Dark overlay for glassmorphism */}
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-none" />
         {[...Array(effectivePhotosToTake)].map((_, i) => (
           <div
             key={i}
             className={`
-              w-full aspect-[3/4] rounded-xl overflow-hidden
+              w-full aspect-[3/4] rounded-lg overflow-hidden
               transition-all duration-500 relative z-10
               ${i < photoSlots.length
-                ? 'border-[3px] shadow-2xl'
+                ? 'shadow-lg'
                 : i === currentPhotoIndex && boothState !== 'idle' && boothState !== 'reviewing'
-                  ? 'border-[3px] border-primary animate-breathe'
-                  : 'border-2 border-white/10 shadow-md'
+                  ? 'border border-white/20 bg-white/5'
+                  : 'border border-white/10 bg-white/5'
               }
             `}
             style={{
-              animation: i < photoSlots.length ? 'photoShoot 2.0s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' : undefined,
-              borderColor: i < photoSlots.length ? 'var(--primary)' : undefined,
-              boxShadow: i < photoSlots.length ? 'var(--shadow-glow-magenta)' : undefined,
+              animation: i < photoSlots.length ? 'flyInToSlot 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' : undefined,
             }}
           >
             {photoSlots[i] ? (
@@ -747,22 +743,16 @@ export default function UnifiedBoothScreen() {
                 </div>
               </div>
             ) : (
-              <div className="w-full h-full bg-[#1a1a1a] flex flex-col items-center justify-center gap-3">
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                 {i === currentPhotoIndex && (boothState === 'countdown' || boothState === 'capturing') ? (
                   <>
                     <div className="relative">
-                      <div className="w-6 h-6 bg-[#ff0080] rounded-full animate-ping absolute" />
-                      <div className="w-6 h-6 bg-[#ff0080] rounded-full" />
+                      <div className="w-4 h-4 bg-[#ff0080] rounded-full animate-ping absolute" />
+                      <div className="w-4 h-4 bg-[#ff0080] rounded-full" />
                     </div>
-                    <span className="text-sm text-[#ff0080] font-semibold animate-pulse">
-                      {boothState === 'capturing' ? 'Capturando...' : 'Preparando...'}
-                    </span>
                   </>
                 ) : (
-                  <>
-                    <span className="text-6xl text-[#2a2a2a] font-black">{i + 1}</span>
-                    <span className="text-sm text-[#2a2a2a] font-medium">Esperando</span>
-                  </>
+                  <span className="text-4xl text-white/10 font-bold">{i + 1}</span>
                 )}
               </div>
             )}
@@ -840,18 +830,17 @@ export default function UnifiedBoothScreen() {
               Presiona el botón cuando estés listo
             </p>
 
-            {/* Enhanced gradient button */}
+            {/* Enhanced gradient button - Smaller & Cleaner */}
             <button
               onClick={handleStart}
               className="
-                relative px-20 py-8 rounded-full text-white text-4xl font-bold
+                relative px-12 py-5 rounded-full text-white text-2xl font-bold tracking-wider
                 transition-all duration-300 hover:scale-105 active:scale-95
                 overflow-hidden group
               "
               style={{
-                minHeight: '80px',
                 background: 'var(--gradient-primary)',
-                boxShadow: 'var(--shadow-glow-magenta), var(--shadow-xl)',
+                boxShadow: '0 10px 30px -10px rgba(255, 0, 128, 0.5)',
               }}
               aria-label="Comenzar sesión de fotos"
             >
@@ -859,12 +848,12 @@ export default function UnifiedBoothScreen() {
               <div
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                 style={{
-                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent)',
                   backgroundSize: '200% 100%',
                   animation: 'shimmer 2s infinite',
                 }}
               />
-              <span className="relative z-10 drop-shadow-lg">TOCA PARA COMENZAR</span>
+              <span className="relative z-10 drop-shadow-sm">EMPEZAR</span>
             </button>
             {!kioskMode && (
               <div className="absolute bottom-10">
@@ -892,17 +881,16 @@ export default function UnifiedBoothScreen() {
 
         {/* OVERLAY: COUNTDOWN */}
         {boothState === 'countdown' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
             <CircularCountdown
               value={countdown}
               max={countdownSeconds}
               size={300}
-              strokeWidth={12}
-              color="#ff0080"
-              className="mb-8"
+              strokeWidth={6}
+              className="mb-8 drop-shadow-2xl"
             />
-            <p className="text-white text-3xl font-bold">¡Prepárate!</p>
-            <p className="text-white/70 text-xl mt-2">Foto {currentPhotoIndex + 1} de {effectivePhotosToTake}</p>
+            <p className="text-white text-3xl font-bold drop-shadow-lg">¡Prepárate!</p>
+            <p className="text-white/90 text-xl mt-2 drop-shadow-md">Foto {currentPhotoIndex + 1} de {effectivePhotosToTake}</p>
           </div>
         )}
 
@@ -977,8 +965,8 @@ export default function UnifiedBoothScreen() {
                     setReviewProgress(0);
                   }}
                   className={`w-14 h-14 rounded-lg cursor-pointer transition-all duration-300 overflow-hidden ${i === reviewIndex
-                      ? 'ring-3 ring-[#ff0080] scale-110 opacity-100'
-                      : 'opacity-40 hover:opacity-80 hover:scale-105'
+                    ? 'ring-3 ring-[#ff0080] scale-110 opacity-100'
+                    : 'opacity-40 hover:opacity-80 hover:scale-105'
                     }`}
                 >
                   <img
@@ -1140,39 +1128,14 @@ export default function UnifiedBoothScreen() {
           100% { opacity: 0; }
         }
 
-        @keyframes photoShoot {
+        @keyframes flyInToSlot {
           0% {
             opacity: 0;
-            transform: scale(0.85) translateY(-80px) translateX(0);
-            filter: brightness(2.5) contrast(1.1) saturate(0.4) sepia(1);
-          }
-          25% {
-            opacity: 0.7;
-            transform: scale(0.92) translateY(-20px) translateX(2px);
-            filter: brightness(1.8) contrast(1.05) saturate(0.6) sepia(0.7);
-          }
-          50% {
-            opacity: 0.95;
-            transform: scale(0.98) translateY(5px) translateX(-3px);
-            filter: brightness(1.4) contrast(1) saturate(0.8) sepia(0.3);
-          }
-          70% {
-            opacity: 1;
-            transform: scale(1.01) translateY(-2px) translateX(2px);
-            filter: brightness(1.15) contrast(1) saturate(0.95) sepia(0.1);
-          }
-          85% {
-            transform: scale(1) translateY(1px) translateX(-1px);
-            filter: brightness(1.05) contrast(1) saturate(1) sepia(0);
-          }
-          95% {
-            transform: scale(1) translateY(0) translateX(0.5px);
-            filter: brightness(1) contrast(1) saturate(1) sepia(0);
+            transform: scale(1.5) translate(50%, 0);
           }
           100% {
             opacity: 1;
-            transform: scale(1) translateY(0) translateX(0);
-            filter: brightness(1) contrast(1) saturate(1) sepia(0);
+            transform: scale(1) translate(0, 0);
           }
         }
 
