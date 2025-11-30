@@ -97,13 +97,18 @@ export default function GalleryScreen() {
 
       const flatPhotos = normalizedSessions.flatMap((session) => session.photos);
 
+      // Calcular tamaño total en MB a partir de los bytes de cada foto
+      const totalBytes = flatPhotos.reduce((acc, photo) => acc + (photo.size_bytes || 0), 0);
+      const totalSizeMb = Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
+
       setPhotos(flatPhotos);
       setSessions(normalizedSessions);
       setStats({
         total_sessions: normalizedSessions.length,
         total_photos: flatPhotos.length,
-        latest_session: normalizedSessions[0]?.session_id ?? null,
-        total_size_mb: 0,
+        // Usar created_at de la sesión más reciente para mostrar fecha/hora
+        latest_session: normalizedSessions[0]?.created_at ?? null,
+        total_size_mb: totalSizeMb,
       });
     } catch (error) {
       console.error('Error loading gallery:', error);

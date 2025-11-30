@@ -34,8 +34,8 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
       className={cn(
-        // Use a high z-index so it appears above SettingsScreen overlay (z-[100])
-        "fixed inset-0 z-[110]",
+        // Use a very high z-index so it appears above any app overlays (Settings, Dialog, etc.)
+        "fixed inset-0 z-[10050]",
         "bg-black/60 backdrop-blur-sm",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -58,7 +58,7 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         className={cn(
           // Ensure the content is above the overlay and other app overlays
-          "fixed top-[50%] left-[50%] z-[120]",
+          "fixed top-[50%] left-[50%] z-[10060]",
           "translate-x-[-50%] translate-y-[-50%]",
           "grid w-full max-w-[calc(100%-2rem)] sm:max-w-lg gap-4",
           "glass rounded-xl border border-white/10 p-6",

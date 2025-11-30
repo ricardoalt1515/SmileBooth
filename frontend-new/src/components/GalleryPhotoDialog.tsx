@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, Printer, Share2, Trash2, ChevronLeft, ChevronRight, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,13 +52,20 @@ export default function GalleryPhotoDialog({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Update current index when photo changes
-  useState(() => {
-    if (photo) {
-      const index = allPhotos.findIndex((p) => p.url === photo.url);
-      if (index !== -1) setCurrentIndex(index);
+  // Sincronizar el índice actual cuando cambia la foto seleccionada o la lista de fotos
+  useEffect(() => {
+    if (!photo || !allPhotos || allPhotos.length === 0) {
+      return;
     }
-  });
+
+    const index = allPhotos.findIndex((p) => p.url === photo.url);
+    if (index !== -1) {
+      setCurrentIndex(index);
+    } else {
+      // Si no se encuentra (p. ej. después de una recarga), hacer fallback al inicio
+      setCurrentIndex(0);
+    }
+  }, [photo, allPhotos]);
 
   const currentPhoto = allPhotos[currentIndex] || photo;
 
