@@ -190,6 +190,10 @@ export const photoboothAPI = {
       photo_spacing?: number | null;
       photo_filter?: string | null;
       print_mode?: string | null;
+      // Optional free overlay controls (normalized / scale)
+      design_scale?: number | null;
+      design_offset_x?: number | null;
+      design_offset_y?: number | null;
     }) => {
       // Use imageProcessingClient for longer timeout
       const response = await imageProcessingClient.post('/api/image/compose-strip', {
@@ -202,6 +206,9 @@ export const photoboothAPI = {
         photo_spacing: params.photo_spacing,
         photo_filter: params.photo_filter,
         print_mode: params.print_mode,
+        design_scale: params.design_scale,
+        design_offset_x: params.design_offset_x,
+        design_offset_y: params.design_offset_y,
       });
       return response.data; // { success, strip_path, full_page_path }
     },
@@ -215,6 +222,9 @@ export const photoboothAPI = {
       photo_spacing?: number | null;
       photo_filter?: string | null;
       print_mode?: string | null;
+      design_scale?: number | null;
+      design_offset_x?: number | null;
+      design_offset_y?: number | null;
     }) => {
       const response = await apiClient.post('/api/image/jobs/compose', {
         photo_paths: params.photo_paths,
@@ -226,6 +236,9 @@ export const photoboothAPI = {
         photo_spacing: params.photo_spacing,
         photo_filter: params.photo_filter,
         print_mode: params.print_mode,
+        design_scale: params.design_scale,
+        design_offset_x: params.design_offset_x,
+        design_offset_y: params.design_offset_y,
       });
       return response.data as {
         job_id: string;
@@ -263,6 +276,9 @@ export const photoboothAPI = {
       background_color?: string | null;
       photo_spacing?: number | null;
       photo_filter?: string | null;
+      design_scale?: number | null;
+      design_offset_x?: number | null;
+      design_offset_y?: number | null;
     }) => {
       // Siempre usamos multipart/form-data para alinearnos con la firma de FastAPI,
       // que combina Body opcional + campos Form/File.
@@ -295,6 +311,15 @@ export const photoboothAPI = {
       }
       if (params.photo_filter) {
         form.append('photo_filter', params.photo_filter);
+      }
+      if (params.design_scale !== undefined && params.design_scale !== null) {
+        form.append('design_scale', String(params.design_scale));
+      }
+      if (params.design_offset_x !== undefined && params.design_offset_x !== null) {
+        form.append('design_offset_x', String(params.design_offset_x));
+      }
+      if (params.design_offset_y !== undefined && params.design_offset_y !== null) {
+        form.append('design_offset_y', String(params.design_offset_y));
       }
 
       const response = await imageProcessingClient.post('/api/image/preview-strip', form, {
@@ -594,6 +619,9 @@ export const photoboothAPI = {
       background_color: string;
       photo_spacing: number;
       photo_filter?: string;
+      design_scale?: number | null;
+      design_offset_x?: number | null;
+      design_offset_y?: number | null;
     }) => {
       const response = await apiClient.post('/api/templates/create', templateData);
       return response.data; // Template object
@@ -617,6 +645,9 @@ export const photoboothAPI = {
       background_color?: string;
       photo_spacing?: number;
       photo_filter?: string;
+      design_scale?: number | null;
+      design_offset_x?: number | null;
+      design_offset_y?: number | null;
     }) => {
       const response = await apiClient.put(`/api/templates/${templateId}`, updates);
       return response.data; // Template object

@@ -63,6 +63,9 @@ def _compose_strip_core(request: ComposeStripRequest) -> ComposeStripResponse:
             background_color=request.background_color,
             photo_spacing=request.photo_spacing,
             photo_filter=request.photo_filter,
+            design_scale=request.design_scale,
+            design_offset_x=request.design_offset_x,
+            design_offset_y=request.design_offset_y,
         )
     except Exception as compose_err:
         traceback.print_exc()
@@ -137,6 +140,9 @@ async def preview_strip(
     background_color: str | None = Form(None),
     photo_spacing: int | None = Form(None),
     photo_filter: str | None = Form(None),
+    design_scale: float | None = Form(None),
+    design_offset_x: float | None = Form(None),
+    design_offset_y: float | None = Form(None),
 ):
     """
     Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
@@ -162,6 +168,12 @@ async def preview_strip(
             payload["photo_spacing"] = photo_spacing
         if photo_filter:
             payload["photo_filter"] = photo_filter
+        if design_scale is not None:
+            payload["design_scale"] = design_scale
+        if design_offset_x is not None:
+            payload["design_offset_x"] = design_offset_x
+        if design_offset_y is not None:
+            payload["design_offset_y"] = design_offset_y
 
         # Asegurar que vengan photo_paths válidas
         if not payload.get("photo_paths"):
@@ -219,6 +231,9 @@ async def preview_strip(
             background_color=request_obj.background_color,
             photo_spacing=request_obj.photo_spacing,
             photo_filter=request_obj.photo_filter,
+            design_scale=request_obj.design_scale,
+            design_offset_x=request_obj.design_offset_x,
+            design_offset_y=request_obj.design_offset_y,
         )
         
         # Mover a temp

@@ -69,6 +69,9 @@ export default function ProcessingScreen() {
           photo_spacing: activeTemplate?.photo_spacing,
           photo_filter: effectivePhotoFilter,
           print_mode: printMode,
+          design_scale: activeTemplate?.design_scale ?? null,
+          design_offset_x: activeTemplate?.design_offset_x ?? null,
+          design_offset_y: activeTemplate?.design_offset_y ?? null,
         });
 
         let stripResponse = job.result;

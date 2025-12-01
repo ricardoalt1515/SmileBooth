@@ -13,7 +13,7 @@ class ComposeStripRequest(BaseModel):
     photo_paths: list[str]
     design_path: str | None = None
     session_id: str | None = None  # Opcional para preview
-    
+
     # Template metadata (opcional, usa defaults si no se provee)
     layout: str | None = None  # "3x1-vertical", "4x1-vertical", "6x1-vertical", "2x2-grid"
     design_position: str | None = None  # "top", "bottom", "left", "right"
@@ -21,6 +21,9 @@ class ComposeStripRequest(BaseModel):
     photo_spacing: int | None = None  # Espaciado entre fotos en px
     photo_filter: str | None = None  # Filtro de fotos: none, bw, sepia, glam
     print_mode: str | None = None  # single | dual-strip
+    design_scale: float | None = None
+    design_offset_x: float | None = None
+    design_offset_y: float | None = None
 
 
 class ComposeStripResponse(BaseModel):

@@ -23,6 +23,7 @@ import {
   DESIGN_POSITION_LABELS,
   LAYOUT_3X1_VERTICAL,
   DESIGN_POSITION_BOTTOM,
+  DESIGN_POSITION_TOP,
   getLayoutPhotoCount,
 } from '../types/template';
 import {
@@ -56,6 +57,12 @@ const ENABLE_LIVE_PREVIEW = true; // Toggle para pedir preview real al backend
 const TARGET_RATIO = 4 / 3; // 600x450 en backend
 const RATIO_TOLERANCE = 0.5; // Relajado para aceptar proporciones similares
 const SUPPORTED_POSITIONS: DesignPositionType[] = ['top', 'bottom'];
+const MIN_DESIGN_SCALE = 0.3; // 30 % del ancho del strip
+const MAX_DESIGN_SCALE = 1.0; // 100 % del ancho del strip
+const DEFAULT_DESIGN_SCALE = 1.0;
+const DEFAULT_OFFSET_X = 0.5; // Centro horizontal
+const DEFAULT_OFFSET_Y_TOP = 0.2;
+const DEFAULT_OFFSET_Y_BOTTOM = 0.8;
 // Fotos demo persistidas en disco para que el backend pueda generar preview real
 // Se crean en backend/app/services/demo_assets.py y viven bajo /data/demo/
 const DEMO_PHOTOS = [
@@ -79,6 +86,10 @@ interface FormData {
   background_color: string;
   photo_spacing: number;
   photo_filter: 'none' | 'bw' | 'sepia' | 'glam';
+   // Overlay controls para el diseño (normalizados)
+   design_scale: number; // 0-1, relativo al ancho del strip
+   design_offset_x: number; // 0-1, centro horizontal
+   design_offset_y: number; // 0-1, centro vertical
 }
 
 interface ValidationError {
@@ -94,7 +105,7 @@ export default function TemplateDialog({
 }: TemplateDialogProps) {
   const toast = useToastContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dialogBodyRef = useRef<HTMLDivElement>(null);
+  const previewStripRef = useRef<HTMLDivElement | null>(null);
   // Form state - Single purpose per variable
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -109,6 +120,7 @@ export default function TemplateDialog({
   const [isDragging, setIsDragging] = useState(false);
   const [demoPhotos, setDemoPhotos] = useState<string[]>(DEMO_PHOTOS);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isOverlayDragging, setIsOverlayDragging] = useState(false);
 
   // Helper: Get initial form data - Single source of truth
   function getInitialFormData(): FormData {
@@ -119,6 +131,9 @@ export default function TemplateDialog({
       background_color: DEFAULT_BACKGROUND_COLOR,
       photo_spacing: DEFAULT_PHOTO_SPACING,
       photo_filter: 'none',
+      design_scale: DEFAULT_DESIGN_SCALE,
+      design_offset_x: DEFAULT_OFFSET_X,
+      design_offset_y: DEFAULT_OFFSET_Y_BOTTOM,
     };
   }
 
@@ -133,6 +148,13 @@ export default function TemplateDialog({
         background_color: editingTemplate.background_color,
         photo_spacing: editingTemplate.photo_spacing,
         photo_filter: (editingTemplate.photo_filter as FormData['photo_filter']) || 'none',
+        design_scale: editingTemplate.design_scale ?? DEFAULT_DESIGN_SCALE,
+        design_offset_x: editingTemplate.design_offset_x ?? DEFAULT_OFFSET_X,
+        design_offset_y:
+          editingTemplate.design_offset_y ??
+          (editingTemplate.design_position === DESIGN_POSITION_TOP
+            ? DEFAULT_OFFSET_Y_TOP
+            : DEFAULT_OFFSET_Y_BOTTOM),
       });
 
       // Set preview if has design
@@ -223,6 +245,9 @@ export default function TemplateDialog({
           background_color: formData.background_color,
           photo_spacing: formData.photo_spacing,
           photo_filter: formData.photo_filter,
+          design_scale: formData.design_scale,
+          design_offset_x: formData.design_offset_x,
+          design_offset_y: formData.design_offset_y,
         });
         setStripPreviewUrl(previewImage);
       } catch (error) {
@@ -235,6 +260,79 @@ export default function TemplateDialog({
 
     return () => clearTimeout(timer);
   }, [formData, demoPhotos, editingTemplate, designPreviewPath]);
+
+  const updateOverlayPositionFromPoint = useCallback((clientX: number, clientY: number) => {
+    const container = previewStripRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return;
+    }
+    const normX = (clientX - rect.left) / rect.width;
+    const normY = (clientY - rect.top) / rect.height;
+    const clampedX = Math.min(1, Math.max(0, normX));
+    const clampedY = Math.min(1, Math.max(0, normY));
+    setFormData((prev) => ({
+      ...prev,
+      design_offset_x: clampedX,
+      design_offset_y: clampedY,
+    }));
+  }, []);
+
+  const handleOverlayDragStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isSubmitting) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsOverlayDragging(true);
+    updateOverlayPositionFromPoint(e.clientX, e.clientY);
+  }, [isSubmitting, updateOverlayPositionFromPoint]);
+
+  const handleOverlayTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (isSubmitting) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches[0];
+    if (!touch) return;
+    setIsOverlayDragging(true);
+    updateOverlayPositionFromPoint(touch.clientX, touch.clientY);
+  }, [isSubmitting, updateOverlayPositionFromPoint]);
+
+  useEffect(() => {
+    if (!isOverlayDragging) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      event.preventDefault();
+      updateOverlayPositionFromPoint(event.clientX, event.clientY);
+    };
+
+    const handleMouseUp = () => {
+      setIsOverlayDragging(false);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!event.touches.length) return;
+      const touch = event.touches[0];
+      updateOverlayPositionFromPoint(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = () => {
+      setIsOverlayDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [isOverlayDragging, updateOverlayPositionFromPoint]);
 
   // Validation: Validate form data - Returns errors array
   const validateFormData = useCallback((data: FormData): ValidationError[] => {
@@ -406,6 +504,9 @@ export default function TemplateDialog({
           background_color: formData.background_color,
           photo_spacing: formData.photo_spacing,
           photo_filter: formData.photo_filter,
+          design_scale: formData.design_scale,
+          design_offset_x: formData.design_offset_x,
+          design_offset_y: formData.design_offset_y,
         };
 
         const newTemplate = await photoboothAPI.templates.create(templateData);
@@ -701,6 +802,94 @@ export default function TemplateDialog({
                     </p>
                   </div>
                 </div>
+
+                {/* Design size & position */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">Tamaño y posición del diseño</Label>
+                    <Badge variant="outline" className="text-xs">
+                      {Math.round(formData.design_scale * 100)}%
+                    </Badge>
+                  </div>
+
+                  {/* Scale slider */}
+                  <div className="space-y-2">
+                    <Label htmlFor="design_scale" className="text-sm font-medium">
+                      Tamaño del diseño
+                    </Label>
+                    <input
+                      id="design_scale"
+                      type="range"
+                      min={MIN_DESIGN_SCALE * 100}
+                      max={MAX_DESIGN_SCALE * 100}
+                      value={formData.design_scale * 100}
+                      onChange={(e) => {
+                        const value = Number(e.target.value) || DEFAULT_DESIGN_SCALE * 100;
+                        const scale = Math.min(MAX_DESIGN_SCALE, Math.max(MIN_DESIGN_SCALE, value / 100));
+                        setFormData({
+                          ...formData,
+                          design_scale: scale,
+                        });
+                      }}
+                      className="w-full cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ajusta qué tanto ancho ocupa tu arte dentro de la tira.
+                    </p>
+                  </div>
+
+                  {/* Vertical position slider */}
+                  <div className="space-y-2">
+                    <Label htmlFor="design_offset_y" className="text-sm font-medium">
+                      Altura del diseño
+                    </Label>
+                    <input
+                      id="design_offset_y"
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.round(formData.design_offset_y * 100)}
+                      onChange={(e) => {
+                        const value = Number(e.target.value) || 0;
+                        const norm = Math.min(1, Math.max(0, value / 100));
+                        setFormData({
+                          ...formData,
+                          design_offset_y: norm,
+                        });
+                      }}
+                      className="w-full cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      0% = arriba, 100% = abajo. El diseño siempre se mantiene dentro de la tira.
+                    </p>
+                  </div>
+
+                  {/* Horizontal position slider */}
+                  <div className="space-y-2">
+                    <Label htmlFor="design_offset_x" className="text-sm font-medium">
+                      Posición horizontal
+                    </Label>
+                    <input
+                      id="design_offset_x"
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.round(formData.design_offset_x * 100)}
+                      onChange={(e) => {
+                        const value = Number(e.target.value) || 50;
+                        const norm = Math.min(1, Math.max(0, value / 100));
+                        setFormData({
+                          ...formData,
+                          design_offset_x: norm,
+                        });
+                      }}
+                      className="w-full cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      0% = izquierda, 100% = derecha.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -727,31 +916,49 @@ export default function TemplateDialog({
             {/* Preview Container - Centered and Scaled */}
             <div className="flex-1 flex items-center justify-center relative z-10 overflow-hidden p-4">
               <div
+                ref={previewStripRef}
                 className="relative transition-all duration-500 transform hover:scale-[1.01]"
                 style={{
                   height: '100%',
                   maxHeight: '800px',
-                  aspectRatio: '2/6', // Standard strip ratio approximation
+                  aspectRatio: '2/6',
                   backgroundColor: formData.background_color,
                   boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.05)'
                 }}
               >
-                {/* Preview real generado por backend - WYSIWYG */}
                 {stripPreviewUrl ? (
-                  <div className="absolute inset-0 bg-white animate-in fade-in duration-500">
-                    <img
-                      src={stripPreviewUrl}
-                      alt="Preview Real"
-                      className="w-full h-full object-contain"
-                    />
-                    {isLoadingPreview && (
-                      <div className="absolute top-2 right-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <>
+                    <div className="absolute inset-0 bg-white animate-in fade-in duration-500">
+                      <img
+                        src={stripPreviewUrl}
+                        alt="Preview Real"
+                        className="w-full h-full object-contain"
+                      />
+                      {isLoadingPreview && (
+                        <div className="absolute top-2 right-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+                    {(designPreviewPath || editingTemplate?.design_file_path) && (
+                      <div
+                        className={`absolute rounded-lg border-2 border-primary/70 bg-primary/10 shadow-sm cursor-move select-none flex items-center justify-center text-[10px] text-primary-foreground/80 ${isOverlayDragging ? 'ring-2 ring-primary/60' : ''}`}
+                        style={{
+                          left: `${formData.design_offset_x * 100}%`,
+                          top: `${formData.design_offset_y * 100}%`,
+                          width: `${Math.min(MAX_DESIGN_SCALE, Math.max(MIN_DESIGN_SCALE, formData.design_scale)) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                          aspectRatio: '4 / 3',
+                          pointerEvents: 'auto',
+                        }}
+                        onMouseDown={handleOverlayDragStart}
+                        onTouchStart={handleOverlayTouchStart}
+                      >
+                        <span>Arrastra para mover</span>
                       </div>
                     )}
-                  </div>
+                  </>
                 ) : (
-                  /* Loading / Placeholder cuando no hay preview real */
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8">
                     {isLoadingPreview ? (
                       <>

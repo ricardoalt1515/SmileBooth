@@ -69,13 +69,17 @@ class ImageService:
     def compose_strip(
         photo_paths: List[Path],
         design_path: Optional[Path] = None,
-        session_id: str = None,
+        session_id: Optional[str] = None,
         # Template metadata (optional)
         layout: Optional[str] = None,
         design_position: Optional[str] = None,
         background_color: Optional[str] = None,
         photo_spacing: Optional[int] = None,
         photo_filter: Optional[str] = None,
+        # Optional free overlay controls (normalized / scale)
+        design_scale: Optional[float] = None,
+        design_offset_x: Optional[float] = None,
+        design_offset_y: Optional[float] = None,
     ) -> Path:
         """
         Compone una tira de fotos + diseño personalizado.
@@ -135,6 +139,17 @@ class ImageService:
 
         design_exists = bool(design_path and design_path.exists())
 
+        # Modo overlay libre si hay diseño y al menos uno de los controles viene definido.
+        # Esto mantiene compatibilidad: templates antiguos (sin escala/offsets) siguen
+        # usando la banda fija arriba/abajo.
+        use_free_overlay = bool(
+            design_exists and (
+                design_scale is not None
+                or design_offset_x is not None
+                or design_offset_y is not None
+            )
+        )
+
         # Calcular dimensiones objetivo basadas en layout
         strip_width = base_strip_width
         target_strip_height = None
@@ -143,7 +158,11 @@ class ImageService:
 
         # Calcular altura total del canvas dinámicamente
         num_photos = len(photo_paths)
-        design_section_height = DESIGN_HEIGHT + PHOTO_SPACING if design_exists else 0
+        # Reservar espacio vertical solo para el modo legacy de banda fija.
+        if design_exists and not use_free_overlay:
+            design_section_height = DESIGN_HEIGHT + PHOTO_SPACING
+        else:
+            design_section_height = 0
 
         if target_strip_height:
             available_height = target_strip_height - TOP_MARGIN - BOTTOM_MARGIN - design_section_height
@@ -167,8 +186,8 @@ class ImageService:
             # Y offset inicial
             y_offset = TOP_MARGIN
 
-            # 0. Agregar diseño arriba si aplica
-            if design_exists and design_position_normalized == DESIGN_POSITION_TOP:
+            # 0. Agregar diseño arriba si aplica (modo banda fija)
+            if design_exists and not use_free_overlay and design_position_normalized == DESIGN_POSITION_TOP:
                 y_offset = ImageService._paste_design(
                     strip,
                     design_path,
@@ -219,8 +238,8 @@ class ImageService:
                   # Forzar limpieza de memoria
                   gc.collect()
             
-            # 2. Agregar diseño abajo si aplica
-            if design_exists and design_position_normalized == DESIGN_POSITION_BOTTOM:
+            # 2. Agregar diseño abajo si aplica (modo banda fija)
+            if design_exists and not use_free_overlay and design_position_normalized == DESIGN_POSITION_BOTTOM:
                 ImageService._paste_design(
                     strip,
                     design_path,
@@ -229,6 +248,19 @@ class ImageService:
                     y_offset,
                     add_spacing=False,
                     spacing=PHOTO_SPACING
+                )
+
+            # 2b. Overlay libre (escala + offsets normalizados)
+            if design_exists and use_free_overlay and design_path is not None:
+                ImageService._paste_design_free_overlay(
+                    canvas=strip,
+                    design_path=design_path,
+                    strip_width=strip_width,
+                    strip_height=strip_height,
+                    design_scale=design_scale,
+                    design_offset_x=design_offset_x,
+                    design_offset_y=design_offset_y,
+                    design_position=design_position_normalized,
                 )
             
             # 3. Guardar strip en carpeta de sesión para nomenclatura consistente
@@ -368,6 +400,88 @@ class ImageService:
                 new_offset += spacing
 
             return new_offset
+        finally:
+            design.close()
+            del design
+            gc.collect()
+
+    @staticmethod
+    def _paste_design_free_overlay(
+        canvas: Image.Image,
+        design_path: Path,
+        strip_width: int,
+        strip_height: int,
+        design_scale: Optional[float],
+        design_offset_x: Optional[float],
+        design_offset_y: Optional[float],
+        design_position: str,
+    ) -> None:
+        """Coloca el diseño como overlay libre usando escala y offsets normalizados.
+
+        - design_scale controla el ancho relativo al strip (0-1).
+        - design_offset_x/y controlan la posición del centro en coordenadas normalizadas (0-1).
+        """
+        # Usar rangos razonables para evitar valores extremos sin propagar magia por el código.
+        MIN_SCALE = 0.3
+        MAX_SCALE = 1.0
+        DEFAULT_SCALE = 1.0
+        DEFAULT_TOP_Y = 0.2
+        DEFAULT_BOTTOM_Y = 0.8
+
+        design = Image.open(design_path)
+
+        try:
+            if design.width <= 0 or design.height <= 0:
+                raise ValueError("Design image has invalid dimensions")
+
+            # Normalizar escala
+            scale = design_scale if design_scale is not None else DEFAULT_SCALE
+            if scale <= 0:
+                scale = DEFAULT_SCALE
+            scale = max(MIN_SCALE, min(MAX_SCALE, scale))
+
+            target_width = int(strip_width * scale)
+            # Mantener proporción original
+            aspect_ratio = design.width / design.height
+            target_height = max(1, int(target_width / aspect_ratio))
+
+            # Posición normalizada (0-1)
+            center_x_norm = design_offset_x if design_offset_x is not None else 0.5
+            if design_offset_y is not None:
+                center_y_norm = design_offset_y
+            else:
+                center_y_norm = DEFAULT_TOP_Y if design_position == DESIGN_POSITION_TOP else DEFAULT_BOTTOM_Y
+
+            center_x_norm = max(0.0, min(1.0, center_x_norm))
+            center_y_norm = max(0.0, min(1.0, center_y_norm))
+
+            center_x = center_x_norm * strip_width
+            center_y = center_y_norm * strip_height
+
+            half_w = target_width / 2
+            half_h = target_height / 2
+
+            # Clamp para que el diseño no se salga completamente del canvas
+            center_x = max(half_w, min(strip_width - half_w, center_x))
+            center_y = max(half_h, min(strip_height - half_h, center_y))
+
+            left = int(center_x - half_w)
+            top = int(center_y - half_h)
+
+            resized = design.resize(
+                (target_width, target_height),
+                Image.Resampling.LANCZOS,
+            )
+
+            if resized.mode == "RGBA":
+                bg = Image.new("RGB", resized.size, "white")
+                bg.paste(resized, (0, 0), resized)
+                canvas.paste(bg, (left, top))
+                bg.close()
+            else:
+                canvas.paste(resized, (left, top))
+
+            resized.close()
         finally:
             design.close()
             del design

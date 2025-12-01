@@ -38,6 +38,11 @@ export interface Template {
   layout: LayoutType;
   design_file_path: string | null;
   design_position: DesignPositionType;
+  // Optional free overlay controls (normalized / scale)
+  // When all are null/undefined, backend usa el modo legacy de banda fija.
+  design_scale?: number | null;
+  design_offset_x?: number | null;
+  design_offset_y?: number | null;
   background_color: string;
   photo_spacing: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
@@ -56,6 +61,9 @@ export interface TemplateCreate {
   background_color: string;
   photo_spacing: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
+  design_scale?: number | null;
+  design_offset_x?: number | null;
+  design_offset_y?: number | null;
 }
 
 /**
@@ -69,6 +77,9 @@ export interface TemplateUpdate {
   background_color?: string;
   photo_spacing?: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
+  design_scale?: number | null;
+  design_offset_x?: number | null;
+  design_offset_y?: number | null;
 }
 
 /**

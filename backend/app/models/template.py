@@ -55,7 +55,19 @@ class Template(BaseModel):
         default=DESIGN_POSITION_BOTTOM,
         description="Where to place the design element"
     )
-    
+    # Optional free overlay controls (normalized / scale)
+    design_scale: float | None = Field(
+        default=None,
+        description="Optional scale factor for design width relative to strip (0-1). None uses legacy fixed band."
+    )
+    design_offset_x: float | None = Field(
+        default=None,
+        description="Optional normalized horizontal center position for the design (0-1)."
+    )
+    design_offset_y: float | None = Field(
+        default=None,
+        description="Optional normalized vertical center position for the design (0-1)."
+    )
     # Visual settings
     background_color: str = Field(
         default="#FFFFFF",
@@ -97,6 +109,9 @@ class TemplateCreate(BaseModel):
     background_color: str = "#FFFFFF"
     photo_spacing: int = Field(default=20, ge=0, le=100)
     photo_filter: str = "none"
+    design_scale: float | None = None
+    design_offset_x: float | None = None
+    design_offset_y: float | None = None
 
 
 class TemplateUpdate(BaseModel):
@@ -108,6 +123,9 @@ class TemplateUpdate(BaseModel):
     background_color: str | None = None
     photo_spacing: int | None = Field(default=None, ge=0, le=100)
     photo_filter: str | None = None
+    design_scale: float | None = None
+    design_offset_x: float | None = None
+    design_offset_y: float | None = None
 
 
 def get_layout_photo_count(layout: LayoutType) -> int:

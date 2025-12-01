@@ -395,14 +395,18 @@ async def upload_template_design(
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Resize if needed (standard size)
+        # Resize if needed (clamp to reasonable max size, preserving aspect ratio)
         img = Image.open(file_path)
-        target_size = (600, 450)
+        max_width = 2000
+        max_height = 2000
 
-        if img.size != target_size:
-            img_resized = img.resize(target_size, Image.Resampling.LANCZOS)
+        if img.width > max_width or img.height > max_height:
+            scale = min(max_width / img.width, max_height / img.height)
+            new_size = (int(img.width * scale), int(img.height * scale))
+            img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
             img_resized.save(file_path, quality=95)
-            print(f"ℹ️  Design resized from {img.size} to {target_size}")
+            print(f"ℹ️  Design resized from {img.size} to {new_size}")
+            img_resized.close()
 
         img.close()
 

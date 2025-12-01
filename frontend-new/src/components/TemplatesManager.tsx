@@ -141,6 +141,9 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
             background_color: tpl.background_color,
             photo_spacing: tpl.photo_spacing,
             photo_filter: tpl.photo_filter as any,
+            design_scale: tpl.design_scale ?? null,
+            design_offset_x: tpl.design_offset_x ?? null,
+            design_offset_y: tpl.design_offset_y ?? null,
           });
           previewEntries[tpl.id] = url;
         } catch (error) {

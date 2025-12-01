@@ -524,6 +524,9 @@ export default function UnifiedBoothScreen() {
         background_color: activeTemplate?.background_color,
         photo_spacing: activeTemplate?.photo_spacing,
         photo_filter: effectivePhotoFilter, // Usar filtro efectivo de la sesión
+        design_scale: activeTemplate?.design_scale ?? null,
+        design_offset_x: activeTemplate?.design_offset_x ?? null,
+        design_offset_y: activeTemplate?.design_offset_y ?? null,
       });
 
       console.log('✅ Preview generado:', previewUrl);
