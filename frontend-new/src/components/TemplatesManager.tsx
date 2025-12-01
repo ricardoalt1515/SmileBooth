@@ -57,6 +57,7 @@ const DEMO_PHOTOS = [
   '/data/demo/demo1.jpg',
   '/data/demo/demo2.jpg',
   '/data/demo/demo3.jpg',
+  '/data/demo/demo4.jpg',
 ];
 
 interface TemplatesManagerProps {
@@ -110,9 +111,13 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
   useEffect(() => {
     const generatePreviews = async () => {
       if (!templates.length || !demoPhotos.length) return;
-       // Si los demo son data URLs, evitamos llamar al backend y dejamos placeholders
-      const demoArePaths = demoPhotos.every((p) => p.startsWith('/'));
-      if (!demoArePaths) {
+
+      // Si los demo no son rutas en disco, intentamos usar las rutas fijas por defecto
+      const allArePaths = demoPhotos.every((p) => p.startsWith('/'));
+      const basePhotos = allArePaths ? demoPhotos : DEMO_PHOTOS;
+
+      // Verificamos que al menos una ruta parezca válida
+      if (!basePhotos.length) {
         setPreviewMap({});
         return;
       }
@@ -123,10 +128,14 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
 
       for (const tpl of templates) {
         try {
-          const photos = demoPhotos.slice(0, needs(tpl.layout));
+          const required = needs(tpl.layout);
+          const effectivePhotos = Array.from({ length: required }, (_, idx) =>
+            basePhotos[idx % basePhotos.length]
+          );
+
           const url = await photoboothAPI.image.previewStrip({
-            photo_paths: photos,
-            design_path: tpl.design_file_path || undefined,
+            photo_paths: effectivePhotos,
+            design_path: tpl.design_file_path ?? null,
             layout: tpl.layout,
             design_position: tpl.design_position,
             background_color: tpl.background_color,
@@ -341,6 +350,12 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                         <div className="w-24 h-32 flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded">
                           Generando preview...
                         </div>
+                      ) : template.design_file_path ? (
+                        <img
+                          src={photoboothAPI.templates.getPreview(template.id)}
+                          alt={template.name}
+                          className="max-h-32 rounded border object-contain bg-white"
+                        />
                       ) : (
                         <div 
                           className="w-20 h-28 rounded border-2 border-dashed flex items-center justify-center"

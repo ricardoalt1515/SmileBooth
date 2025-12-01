@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Upload, X, CheckCircle2 } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
-import photoboothAPI from '../services/api';
+import photoboothAPI, { API_BASE_URL } from '../services/api';
 import {
   Template,
   TemplateCreate,
@@ -52,14 +52,17 @@ const MIN_PHOTO_SPACING = 0;
 const MAX_PHOTO_SPACING = 100;
 const MAX_FILE_SIZE_MB = 10;
 const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
+const ENABLE_LIVE_PREVIEW = true; // Toggle para pedir preview real al backend
 const TARGET_RATIO = 4 / 3; // 600x450 en backend
-const RATIO_TOLERANCE = 0.1;
+const RATIO_TOLERANCE = 0.5; // Relajado para aceptar proporciones similares
+const SUPPORTED_POSITIONS: DesignPositionType[] = ['top', 'bottom'];
 // Fotos demo persistidas en disco para que el backend pueda generar preview real
 // Se crean en backend/app/services/demo_assets.py y viven bajo /data/demo/
 const DEMO_PHOTOS = [
   '/data/demo/demo1.jpg',
   '/data/demo/demo2.jpg',
   '/data/demo/demo3.jpg',
+  '/data/demo/demo4.jpg',
 ];
 
 interface TemplateDialogProps {
@@ -97,8 +100,9 @@ export default function TemplateDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // State separation: Design (input) vs Strip (output)
-  const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null); // For the uploaded/existing design file
-  const [stripPreviewUrl, setStripPreviewUrl] = useState<string | null>(null); // For the full generated strip from backend
+  const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null); // visual del archivo subido/existente
+  const [designPreviewPath, setDesignPreviewPath] = useState<string | null>(null); // ruta servible (/data/...) para backend
+  const [stripPreviewUrl, setStripPreviewUrl] = useState<string | null>(null); // strip generado por backend
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<ValidationError[]>([]);
@@ -133,17 +137,17 @@ export default function TemplateDialog({
 
       // Set preview if has design
       if (editingTemplate.design_file_path) {
-        // We assume the backend provides a way to get the design file URL. 
-        // Usually getPreview returns the full strip, but for editing we might need the raw design.
-        // If getPreview returns the design file, use it here.
-        setDesignPreviewUrl(photoboothAPI.templates.getPreview(editingTemplate.id));
+        setDesignPreviewUrl(`${API_BASE_URL}${editingTemplate.design_file_path}`);
+        setDesignPreviewPath(editingTemplate.design_file_path);
       } else {
         setDesignPreviewUrl(null);
+        setDesignPreviewPath(null);
       }
       setStripPreviewUrl(null);
     } else {
       setFormData(getInitialFormData());
       setDesignPreviewUrl(null);
+      setDesignPreviewPath(null);
       setStripPreviewUrl(null);
     }
     setSelectedFile(null);
@@ -156,6 +160,20 @@ export default function TemplateDialog({
     setDemoPhotos(DEMO_PHOTOS);
   }, []);
 
+  // Evitar que arrastrar/soltar abra el archivo en la ventana (especialmente en Electron)
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('dragover', preventDefault);
+    window.addEventListener('drop', preventDefault);
+    return () => {
+      window.removeEventListener('dragover', preventDefault);
+      window.removeEventListener('drop', preventDefault);
+    };
+  }, []);
+
   // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
@@ -166,24 +184,40 @@ export default function TemplateDialog({
     };
   }, [designPreviewUrl]);
 
-  // Render real preview when enough demo photos exist
+  // Render real preview using demo photos (reusing them if layout necesita más)
   useEffect(() => {
-    const needs = getLayoutPhotoCount(formData.layout);
-    if (demoPhotos.length < needs) {
+    if (!ENABLE_LIVE_PREVIEW) {
+      setStripPreviewUrl(null);
       return;
     }
+
+    const needs = getLayoutPhotoCount(formData.layout);
+
+    // Sin fotos demo no podemos generar preview real
+    if (!demoPhotos.length) {
+      return;
+    }
+
+    // Asegurar que siempre tengamos suficientes rutas válidas reutilizando las demos
+    const allArePaths = demoPhotos.every((p) => p.startsWith('/'));
+    const basePhotos = allArePaths ? demoPhotos : DEMO_PHOTOS;
+
+    const effectivePhotos = Array.from({ length: needs }, (_, idx) =>
+      basePhotos[idx % basePhotos.length]
+    );
+
+    const demoArePaths = effectivePhotos.every((p) => p.startsWith('/'));
+    if (!demoArePaths) {
+      setStripPreviewUrl(null);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       try {
         setIsLoadingPreview(true);
         const previewImage = await photoboothAPI.image.previewStrip({
-          photo_paths: demoPhotos.slice(0, needs),
-          design_path: undefined, // We don't send path, we might need to send the file if it's new? 
-          // Actually, for live preview of *new* upload, we might need to send the blob? 
-          // The current backend API might expect a path. 
-          // If selectedFile exists, we can't easily send it to previewStrip unless the API supports it.
-          // For now, we'll rely on the HTML preview for the design part if it's not saved yet,
-          // OR we accept that the "Real" preview won't show the new design until saved.
-          // BUT, to fix the bug, we MUST NOT set designPreviewUrl here.
+          photo_paths: effectivePhotos,
+          design_path: designPreviewPath ?? editingTemplate?.design_file_path ?? null,
           layout: formData.layout,
           design_position: formData.design_position,
           background_color: formData.background_color,
@@ -193,13 +227,14 @@ export default function TemplateDialog({
         setStripPreviewUrl(previewImage);
       } catch (error) {
         console.error('Error generando preview real:', error);
+        setStripPreviewUrl(null);
       } finally {
         setIsLoadingPreview(false);
       }
     }, 800); // Increased debounce to reduce flickering
 
     return () => clearTimeout(timer);
-  }, [formData, demoPhotos, editingTemplate]);
+  }, [formData, demoPhotos, editingTemplate, designPreviewPath]);
 
   // Validation: Validate form data - Returns errors array
   const validateFormData = useCallback((data: FormData): ValidationError[] => {
@@ -246,7 +281,13 @@ export default function TemplateDialog({
         const ratio = img.width / img.height;
         const ratioDiff = Math.abs(ratio - TARGET_RATIO);
         if (ratioDiff > RATIO_TOLERANCE) {
-          resolve('La imagen debe tener proporción 4:3 (ej. 1200x900, 600x450)');
+          const actualRatioText = (ratio).toFixed(2);
+          const targetRatioText = TARGET_RATIO.toFixed(2);
+          resolve(
+            `La imagen tiene proporción ${actualRatioText}:1 (${img.width}x${img.height}). ` +
+            `Se recomienda proporción ${targetRatioText}:1 (ej. 1200x900, 800x600). ` +
+            `El backend la redimensionará automáticamente a 600x450.`
+          );
           return;
         }
         resolve(null);
@@ -282,21 +323,36 @@ export default function TemplateDialog({
     // Create new preview URL for the DESIGN FILE
     const newPreviewUrl = URL.createObjectURL(file);
     setDesignPreviewUrl(newPreviewUrl);
+
+    // Subir diseño temporal para que el backend pueda generar preview real
+    try {
+      setIsLoadingPreview(true);
+      const path = await photoboothAPI.image.uploadDesignPreview(file);
+      setDesignPreviewPath(path);
+    } catch (uploadErr) {
+      console.error('No se pudo subir diseño temporal:', uploadErr);
+      setDesignPreviewPath(null);
+    } finally {
+      setIsLoadingPreview(false);
+    }
   }, [validateFile, validateImageDimensions, toast, designPreviewUrl]);
 
   // Handler: Drag & drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
 
     const file = e.dataTransfer.files[0];
@@ -311,10 +367,13 @@ export default function TemplateDialog({
     if (designPreviewUrl && designPreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(designPreviewUrl);
     }
-    setDesignPreviewUrl(editingTemplate?.design_file_path
-      ? photoboothAPI.templates.getPreview(editingTemplate.id)
-      : null
-    );
+    if (editingTemplate?.design_file_path) {
+      setDesignPreviewUrl(photoboothAPI.templates.getPreview(editingTemplate.id));
+      setDesignPreviewPath(editingTemplate.design_file_path);
+    } else {
+      setDesignPreviewUrl(null);
+      setDesignPreviewPath(null);
+    }
   }, [designPreviewUrl, editingTemplate]);
 
   // Handler: Submit form
@@ -368,6 +427,7 @@ export default function TemplateDialog({
       setFormData(getInitialFormData());
       setSelectedFile(null);
       setDesignPreviewUrl(null);
+      setDesignPreviewPath(null);
       setStripPreviewUrl(null);
 
     } catch (error: any) {
@@ -443,10 +503,10 @@ export default function TemplateDialog({
                   <div>
                     <Label className="text-base font-semibold">Arte</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Sube tu marco/overlay (PNG/JPG 4:3)
+                      Sube tu marco/overlay (PNG/JPG, máx {MAX_FILE_SIZE_MB}MB)
                     </p>
                   </div>
-                  <Badge variant="secondary" className="px-3 py-1">Archivo 4:3</Badge>
+                  <Badge variant="secondary" className="px-3 py-1">Se redimensiona a 600x450</Badge>
                 </div>
                 <div
                   onDragOver={handleDragOver}
@@ -563,11 +623,13 @@ export default function TemplateDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.entries(DESIGN_POSITION_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
+                        {Object.entries(DESIGN_POSITION_LABELS)
+                          .filter(([value]) => SUPPORTED_POSITIONS.includes(value as DesignPositionType))
+                          .map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -674,12 +736,12 @@ export default function TemplateDialog({
                   boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.05)'
                 }}
               >
-                {/* Si tenemos el strip generado por backend, lo mostramos encima de todo */}
-                {stripPreviewUrl && (
-                  <div className="absolute inset-0 z-20 bg-white animate-in fade-in duration-500">
+                {/* Preview real generado por backend - WYSIWYG */}
+                {stripPreviewUrl ? (
+                  <div className="absolute inset-0 bg-white animate-in fade-in duration-500">
                     <img
                       src={stripPreviewUrl}
-                      alt="Final Strip Preview"
+                      alt="Preview Real"
                       className="w-full h-full object-contain"
                     />
                     {isLoadingPreview && (
@@ -688,140 +750,42 @@ export default function TemplateDialog({
                       </div>
                     )}
                   </div>
+                ) : (
+                  /* Loading / Placeholder cuando no hay preview real */
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8">
+                    {isLoadingPreview ? (
+                      <>
+                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                        <div className="text-center">
+                          <p className="font-semibold text-lg">Generando preview...</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Esto puede tardar unos segundos
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-center max-w-md">
+                          <p className="font-semibold text-lg mb-2">Configura tu template</p>
+                          <p className="text-sm text-muted-foreground">
+                            Selecciona un diseño, ajusta el layout y el espaciado.
+                            El preview se generará automáticamente mostrando exactamente cómo se verá tu strip final.
+                          </p>
+                        </div>
+                        {designPreviewUrl && (
+                          <div className="mt-4">
+                            <p className="text-xs text-muted-foreground mb-2 text-center">Tu diseño:</p>
+                            <img
+                              src={designPreviewUrl}
+                              alt="Diseño seleccionado"
+                              className="max-h-32 rounded-lg shadow-md"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
-
-                {/* HTML Skeleton (Fallback & Live Edit) */}
-                <div className={`w-full h-full flex flex-col ${stripPreviewUrl ? 'opacity-0' : 'opacity-100'}`}>
-
-                  {formData.layout === '3x1-vertical' && (
-                    <div
-                      className="flex flex-col h-full p-4"
-                      style={{ gap: `${formData.photo_spacing / 2}px` }} // Scaled gap approximation
-                    >
-                      {formData.design_position === 'top' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20 shrink-0">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover rounded" />
-                          ) : (
-                            <div className="flex flex-col items-center gap-2 text-primary">
-                              <Upload className="w-8 h-8" />
-                              <span>Tu Diseño</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {stripPreviewUrl ? (
-                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg flex-1" />
-                      ) : (
-                        [1, 2, 3].map((i) => (
-                          <div key={i} className="bg-muted flex-1 rounded-lg flex items-center justify-center text-lg font-bold text-muted-foreground border-2 border-border transition-all duration-300">
-                            Foto {i}
-                          </div>
-                        ))
-                      )}
-                      {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20 shrink-0">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover rounded" />
-                          ) : (
-                            <div className="flex flex-col items-center gap-2 text-primary">
-                              <Upload className="w-8 h-8" />
-                              <span>Tu Diseño</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {formData.layout === '4x1-vertical' && (
-                    <div
-                      className="flex flex-col h-full p-3"
-                      style={{ gap: `${formData.photo_spacing / 2}px` }}
-                    >
-                      {formData.design_position === 'top' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20 shrink-0">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
-                          ) : (
-                            'Tu Diseño'
-                          )}
-                        </div>
-                      )}
-                      {stripPreviewUrl ? (
-                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg flex-1" />
-                      ) : (
-                        [1, 2, 3, 4].map((i) => (
-                          <div key={i} className="bg-muted flex-1 rounded flex items-center justify-center text-base font-semibold text-muted-foreground border border-border transition-all duration-300">
-                            Foto {i}
-                          </div>
-                        ))
-                      )}
-                      {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20 shrink-0">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
-                          ) : (
-                            'Tu Diseño'
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {formData.layout === '6x1-vertical' && (
-                    <div className="space-y-1.5 p-2">
-                      {formData.design_position === 'top' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-16 rounded flex items-center justify-center text-[10px] font-medium overflow-hidden border border-primary/20">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
-                          ) : (
-                            'Diseño'
-                          )}
-                        </div>
-                      )}
-                      {stripPreviewUrl ? (
-                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg" />
-                      ) : (
-                        [1, 2, 3, 4, 5, 6].map((i) => (
-                          <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-xs font-semibold text-muted-foreground border border-border transition-all duration-300">
-                            {i}
-                          </div>
-                        ))
-                      )}
-                      {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-16 rounded flex items-center justify-center text-[10px] font-medium overflow-hidden border border-primary/20">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
-                          ) : (
-                            'Diseño'
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {formData.layout === '2x2-grid' && (
-                    <div className="p-3">
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="bg-muted aspect-square rounded flex items-center justify-center text-sm font-semibold text-muted-foreground border border-border transition-all duration-300">
-                            {i}
-                          </div>
-                        ))}
-                      </div>
-                      {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20">
-                          {designPreviewUrl ? (
-                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
-                          ) : (
-                            'Tu Diseño'
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 

@@ -256,6 +256,7 @@ export const photoboothAPI = {
     previewStrip: async (params: {
       photo_paths: string[];
       design_path?: string | null;
+      design_file?: File | null;
       // Template metadata (optional)
       layout?: string | null;
       design_position?: string | null;
@@ -263,22 +264,63 @@ export const photoboothAPI = {
       photo_spacing?: number | null;
       photo_filter?: string | null;
     }) => {
-      // Use imageProcessingClient for longer timeout
-      const response = await imageProcessingClient.post('/api/image/preview-strip', {
-        photo_paths: params.photo_paths,
-        design_path: params.design_path || null,
-        layout: params.layout,
-        design_position: params.design_position,
-        background_color: params.background_color,
-        photo_spacing: params.photo_spacing,
-        photo_filter: params.photo_filter,
-      }, {
-        responseType: 'blob', // Recibir imagen como blob
+      // Siempre usamos multipart/form-data para alinearnos con la firma de FastAPI,
+      // que combina Body opcional + campos Form/File.
+      const form = new FormData();
+
+      // Lista de fotos como JSON serializado
+      form.append('photo_paths_json', JSON.stringify(params.photo_paths));
+
+      // Diseño temporal opcional
+      if (params.design_file) {
+        form.append('design_file', params.design_file);
+      }
+
+      // design_path se espera como design_path_form en el backend
+      if (params.design_path) {
+        form.append('design_path_form', params.design_path);
+      }
+
+      if (params.layout) {
+        form.append('layout', params.layout);
+      }
+      if (params.design_position) {
+        form.append('design_position', params.design_position);
+      }
+      if (params.background_color) {
+        form.append('background_color', params.background_color);
+      }
+      if (params.photo_spacing !== undefined && params.photo_spacing !== null) {
+        form.append('photo_spacing', String(params.photo_spacing));
+      }
+      if (params.photo_filter) {
+        form.append('photo_filter', params.photo_filter);
+      }
+
+      const response = await imageProcessingClient.post('/api/image/preview-strip', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // Crear URL del blob para mostrar en <img>
-      const imageBlob = response.data;
-      const imageUrl = URL.createObjectURL(imageBlob);
-      return imageUrl;
+      const previewPath: string | undefined = (response.data as any)?.preview_path;
+      if (!previewPath) {
+        throw new Error('Respuesta inválida de preview-strip');
+      }
+      if (previewPath.startsWith('http')) {
+        return previewPath;
+      }
+      return `${API_BASE_URL}${previewPath}`;
+    },
+    uploadDesignPreview: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await imageProcessingClient.post('/api/image/design-preview-upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const designPath: string | undefined = (response.data as any)?.design_path;
+      if (!designPath) {
+        throw new Error('Respuesta inválida al subir diseño');
+      }
+      // Devolvemos la ruta servible tal cual (/data/...) para usarla en previewStrip
+      return designPath;
     },
   },
 

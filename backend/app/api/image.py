@@ -2,13 +2,17 @@
 API de Imágenes - Endpoints optimizados
 """
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+import json
+import shutil
+import time
 import traceback
+from uuid import uuid4
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
+from fastapi.responses import FileResponse
 from app.services.image_service import ImageService
 from app.services.image_jobs import ImageJobQueueService
 from app.schemas.image import ComposeStripRequest, ComposeStripResponse, ComposeJobResult
-from app.config import DATA_DIR, TEMP_DIR
+from app.config import DATA_DIR, TEMP_DIR, RESOURCE_LIMITS
 
 router = APIRouter(prefix="/api/image", tags=["image"])
 
@@ -84,6 +88,26 @@ def _compose_strip_core(request: ComposeStripRequest) -> ComposeStripResponse:
     )
 
 
+def _save_temp_design_file(upload: UploadFile) -> Path:
+    """Save uploaded design to TEMP_DIR and return absolute path."""
+    content_type = upload.content_type or ""
+    if content_type not in ("image/png", "image/jpeg", "image/jpg"):
+        raise HTTPException(status_code=400, detail="Solo se permiten PNG o JPG para el diseño")
+
+    # Limitar tamaño
+    upload.file.seek(0, 2)
+    size_mb = upload.file.tell() / (1024 * 1024)
+    upload.file.seek(0)
+    if size_mb > RESOURCE_LIMITS.get("max_photo_size_mb", 10):
+        raise HTTPException(status_code=400, detail="El diseño supera el tamaño permitido")
+
+    suffix = Path(upload.filename or "design").suffix or ".png"
+    target = TEMP_DIR / f"design_preview_{int(time.time())}{suffix}"
+    with target.open("wb") as f:
+        f.write(upload.file.read())
+    return target
+
+
 @router.post("/compose-strip", response_model=ComposeStripResponse)
 async def compose_strip(request: ComposeStripRequest):
     """
@@ -103,19 +127,54 @@ async def compose_strip(request: ComposeStripRequest):
 
 
 @router.post("/preview-strip")
-async def preview_strip(request: ComposeStripRequest):
+async def preview_strip(
+    request: ComposeStripRequest | None = Body(None),
+    design_file: UploadFile | None = File(None),
+    photo_paths_json: str | None = Form(None),
+    design_path_form: str | None = Form(None),
+    layout: str | None = Form(None),
+    design_position: str | None = Form(None),
+    background_color: str | None = Form(None),
+    photo_spacing: int | None = Form(None),
+    photo_filter: str | None = Form(None),
+):
     """
-    Genera un preview temporal del strip sin guardarlo permanentemente.
-    Se usa para mostrar al usuario cómo quedará antes de procesar.
-    El archivo se guarda en TEMP y se limpia automáticamente.
+    Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
+    Si se envía design_file (multipart), se usa ese archivo temporalmente.
     """
     try:
-        print(f"📸 Preview request: {request.photo_paths}")
-        print(f"🎨 Design: {request.design_path}")
-        
+        # Reconstruir request si vino multipart con strings
+        payload = request.model_dump() if request else {}
+        if photo_paths_json:
+            try:
+                payload["photo_paths"] = json.loads(photo_paths_json)
+            except Exception as json_err:
+                raise HTTPException(status_code=400, detail=f"photo_paths inválido: {json_err}")
+        if design_path_form:
+            payload["design_path"] = design_path_form
+        if layout:
+            payload["layout"] = layout
+        if design_position:
+            payload["design_position"] = design_position
+        if background_color:
+            payload["background_color"] = background_color
+        if photo_spacing is not None:
+            payload["photo_spacing"] = photo_spacing
+        if photo_filter:
+            payload["photo_filter"] = photo_filter
+
+        # Asegurar que vengan photo_paths válidas
+        if not payload.get("photo_paths"):
+            raise HTTPException(status_code=400, detail="photo_paths es requerido para preview")
+
+        try:
+            request_obj = ComposeStripRequest(**payload)
+        except Exception as parse_err:
+            raise HTTPException(status_code=400, detail=f"Payload de preview inválido: {parse_err}")
+
         # Convertir paths relativos a absolutos
         photo_paths = []
-        for p in request.photo_paths:
+        for p in request_obj.photo_paths:
             if p.startswith('/data/'):
                 rel_path = p.replace('/data/', '')
                 abs_path = DATA_DIR / rel_path
@@ -131,20 +190,23 @@ async def preview_strip(request: ComposeStripRequest):
             
             photo_paths.append(abs_path)
         
-        print(f"✅ {len(photo_paths)} fotos encontradas")
-        
         # Design path
         design_path = None
-        if request.design_path:
-            if request.design_path.startswith('/data/'):
-                rel_path = request.design_path.replace('/data/', '')
+        if design_file:
+            design_path = _save_temp_design_file(design_file)
+        elif request_obj.design_path:
+            if request_obj.design_path.startswith('/data/'):
+                rel_path = request_obj.design_path.replace('/data/', '')
                 design_path = DATA_DIR / rel_path
             else:
-                design_path = Path(request.design_path)
+                design_path = Path(request_obj.design_path)
         
-        # Generar preview en carpeta temporal
-        import time
-        preview_filename = f"preview_{int(time.time())}.jpg"
+        # Generar preview en carpeta temporal con nombre único para evitar colisiones
+        # Cuando se generaban varias tiras casi al mismo tiempo, todas usaban
+        # el mismo nombre basado solo en segundos, y el último preview pisaba a los demás.
+        timestamp_ms = int(time.time() * 1000)
+        unique_suffix = uuid4().hex[:8]
+        preview_filename = f"preview_{timestamp_ms}_{unique_suffix}.jpg"
         preview_path = TEMP_DIR / preview_filename
         
         # Componer strip (sin crear duplicate) con metadatos del template
@@ -152,15 +214,14 @@ async def preview_strip(request: ComposeStripRequest):
             photo_paths=photo_paths,
             design_path=design_path,
             session_id="preview",  # Carpeta temporal
-            layout=request.layout,
-            design_position=request.design_position,
-            background_color=request.background_color,
-            photo_spacing=request.photo_spacing,
-            photo_filter=request.photo_filter,
+            layout=request_obj.layout,
+            design_position=request_obj.design_position,
+            background_color=request_obj.background_color,
+            photo_spacing=request_obj.photo_spacing,
+            photo_filter=request_obj.photo_filter,
         )
         
         # Mover a temp
-        import shutil
         shutil.move(str(strip_path), str(preview_path))
         
         # Limpiar carpeta preview
@@ -168,21 +229,31 @@ async def preview_strip(request: ComposeStripRequest):
         if preview_dir.exists() and preview_dir.name == "preview":
             shutil.rmtree(preview_dir)
         
-        # Retornar la imagen directamente
-        return FileResponse(
-            preview_path,
-            media_type="image/jpeg",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Preview": "true"
-            }
-        )
-    
+        preview_relative = "/" + str(preview_path.relative_to(DATA_DIR.parent))
+        return {"preview_path": preview_relative}
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error al generar preview: {str(e)}"
         )
+
+
+@router.post("/design-preview-upload")
+async def design_preview_upload(file: UploadFile = File(...)):
+    """
+    Sube un diseño temporal para previews y devuelve su ruta servible (/data/...).
+    """
+    try:
+        design_path = _save_temp_design_file(file)
+        relative = "/" + str(design_path.relative_to(DATA_DIR.parent))
+        return {"design_path": relative}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo guardar diseño: {str(e)}")
 
 
 @router.post("/jobs/compose", response_model=ComposeJobResult)

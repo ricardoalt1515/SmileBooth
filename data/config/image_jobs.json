@@ -1,4 +1,33 @@
 {
+  "c3a7c2dd-89c8-47da-9d70-4148b44c8029": {
+    "job_id": "c3a7c2dd-89c8-47da-9d70-4148b44c8029",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251201_083538/shot-1.jpg",
+        "/data/photos/20251201_083538/shot-2.jpg",
+        "/data/photos/20251201_083538/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251201_082024_design.png",
+      "session_id": "20251201_083538",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 20,
+      "photo_filter": "none",
+      "print_mode": "dual-strip"
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251201_083538/strip.jpg",
+      "full_page_path": "/data/photos/20251201_083538/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-01T08:36:12.154245",
+    "updated_at": "2025-12-01T08:36:12.937354"
+  },
   "7cad3d39-887c-4511-bc1e-56e1af92c88d": {
     "job_id": "7cad3d39-887c-4511-bc1e-56e1af92c88d",
     "job_type": "compose-strip",
