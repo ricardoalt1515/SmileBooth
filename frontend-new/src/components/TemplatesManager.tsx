@@ -52,6 +52,12 @@ import TemplateDialog from './TemplateDialog';
 // Constants - Avoid magic numbers
 const PREVIEW_PLACEHOLDER_COLOR = '#e5e7eb';
 const ACTIVE_TEMPLATE_BORDER_COLOR = 'border-2 border-primary';
+// Fotos demo persistidas en disco (se crean en backend/app/services/demo_assets.py)
+const DEMO_PHOTOS = [
+  '/data/demo/demo1.jpg',
+  '/data/demo/demo2.jpg',
+  '/data/demo/demo3.jpg',
+];
 
 interface TemplatesManagerProps {
   onTemplateActivated?: (template: Template) => void;
@@ -66,6 +72,10 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [previewMap, setPreviewMap] = useState<Record<string, string>>({});
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [demoPhotos, setDemoPhotos] = useState<string[]>(DEMO_PHOTOS);
+  const [duplicateTemplateId, setDuplicateTemplateId] = useState<string | null>(null);
   
   const toast = useToastContext();
 
@@ -88,6 +98,52 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
+
+  // Load demo photos once; fallback to in-memory placeholders
+  useEffect(() => {
+    // Usar fotos demo fijas; si en el futuro se quiere personalizar,
+    // añadir aquí un selector explícito en la UI.
+    setDemoPhotos(DEMO_PHOTOS);
+  }, []);
+
+  // Generate previews; si las fotos demo no son rutas en disco, usamos placeholders
+  useEffect(() => {
+    const generatePreviews = async () => {
+      if (!templates.length || !demoPhotos.length) return;
+       // Si los demo son data URLs, evitamos llamar al backend y dejamos placeholders
+      const demoArePaths = demoPhotos.every((p) => p.startsWith('/'));
+      if (!demoArePaths) {
+        setPreviewMap({});
+        return;
+      }
+
+      setIsGeneratingPreview(true);
+      const previewEntries: Record<string, string> = {};
+      const needs = (layout: string) => getLayoutPhotoCount(layout as any);
+
+      for (const tpl of templates) {
+        try {
+          const photos = demoPhotos.slice(0, needs(tpl.layout));
+          const url = await photoboothAPI.image.previewStrip({
+            photo_paths: photos,
+            design_path: tpl.design_file_path || undefined,
+            layout: tpl.layout,
+            design_position: tpl.design_position,
+            background_color: tpl.background_color,
+            photo_spacing: tpl.photo_spacing,
+            photo_filter: tpl.photo_filter as any,
+          });
+          previewEntries[tpl.id] = url;
+        } catch (error) {
+          console.warn('No se pudo generar preview para template', tpl.id, error);
+        }
+      }
+      setPreviewMap(previewEntries);
+      setIsGeneratingPreview(false);
+    };
+
+    generatePreviews();
+  }, [templates, demoPhotos]);
 
   // Handler: Activate template
   const handleActivate = async (templateId: string, templateName: string) => {
@@ -269,18 +325,22 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {/* Preview */}
+                  {/* Preview real con fotos de demo */}
                   <div className="mb-4 flex items-center justify-center">
                     <div className="relative">
-                      {template.design_file_path ? (
+                      {previewMap[template.id] ? (
                         <>
                           <img
-                            src={photoboothAPI.templates.getPreview(template.id)}
+                            src={previewMap[template.id]}
                             alt={template.name}
-                            className="max-h-24 rounded border"
+                            className="max-h-32 rounded border"
                           />
                           <div className="pointer-events-none absolute inset-0 border border-dashed border-white/60 rounded" aria-label="Guías de corte" />
                         </>
+                      ) : isGeneratingPreview ? (
+                        <div className="w-24 h-32 flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded">
+                          Generando preview...
+                        </div>
                       ) : (
                         <div 
                           className="w-20 h-28 rounded border-2 border-dashed flex items-center justify-center"
@@ -301,6 +361,10 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Posición:</span>
                       <span>{DESIGN_POSITION_LABELS[template.design_position]}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Espaciado:</span>
+                      <span>{template.photo_spacing}px</span>
                     </div>
                   </div>
 
@@ -331,6 +395,27 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                       }}
                     >
                       <Edit2 className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setDuplicateTemplateId(template.id);
+                        try {
+                          const copy = await photoboothAPI.templates.duplicate(template.id);
+                          toast.success(`Template duplicado: ${copy.name}`);
+                          await loadTemplates();
+                        } catch (error) {
+                          console.error('Error duplicando template:', error);
+                          toast.error('No se pudo duplicar el template');
+                        } finally {
+                          setDuplicateTemplateId(null);
+                        }
+                      }}
+                      disabled={Boolean(duplicateTemplateId)}
+                      title="Duplicar template"
+                    >
+                      <Upload className="w-3 h-3" />
                     </Button>
                     
                     <Button

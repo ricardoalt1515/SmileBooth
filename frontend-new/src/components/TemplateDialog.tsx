@@ -54,6 +54,13 @@ const MAX_FILE_SIZE_MB = 10;
 const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 const TARGET_RATIO = 4 / 3; // 600x450 en backend
 const RATIO_TOLERANCE = 0.1;
+// Fotos demo persistidas en disco para que el backend pueda generar preview real
+// Se crean en backend/app/services/demo_assets.py y viven bajo /data/demo/
+const DEMO_PHOTOS = [
+  '/data/demo/demo1.jpg',
+  '/data/demo/demo2.jpg',
+  '/data/demo/demo3.jpg',
+];
 
 interface TemplateDialogProps {
   open: boolean;
@@ -84,14 +91,20 @@ export default function TemplateDialog({
 }: TemplateDialogProps) {
   const toast = useToastContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const dialogBodyRef = useRef<HTMLDivElement>(null);
   // Form state - Single purpose per variable
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // State separation: Design (input) vs Strip (output)
+  const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null); // For the uploaded/existing design file
+  const [stripPreviewUrl, setStripPreviewUrl] = useState<string | null>(null); // For the full generated strip from backend
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [demoPhotos, setDemoPhotos] = useState<string[]>(DEMO_PHOTOS);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   // Helper: Get initial form data - Single source of truth
   function getInitialFormData(): FormData {
@@ -107,7 +120,7 @@ export default function TemplateDialog({
 
   // Initialize form when editing template
   useEffect(() => {
-    
+
     if (editingTemplate) {
       setFormData({
         name: editingTemplate.name,
@@ -117,27 +130,76 @@ export default function TemplateDialog({
         photo_spacing: editingTemplate.photo_spacing,
         photo_filter: (editingTemplate.photo_filter as FormData['photo_filter']) || 'none',
       });
-      
+
       // Set preview if has design
       if (editingTemplate.design_file_path) {
-        setPreviewUrl(photoboothAPI.templates.getPreview(editingTemplate.id));
+        // We assume the backend provides a way to get the design file URL. 
+        // Usually getPreview returns the full strip, but for editing we might need the raw design.
+        // If getPreview returns the design file, use it here.
+        setDesignPreviewUrl(photoboothAPI.templates.getPreview(editingTemplate.id));
+      } else {
+        setDesignPreviewUrl(null);
       }
+      setStripPreviewUrl(null);
     } else {
       setFormData(getInitialFormData());
-      setPreviewUrl(null);
+      setDesignPreviewUrl(null);
+      setStripPreviewUrl(null);
     }
     setSelectedFile(null);
     setErrors([]);
   }, [editingTemplate, open]);
 
-  // Cleanup preview URL on unmount
+  // Load demo photos once to render real previews (fallback a placeholders si no hay)
+  useEffect(() => {
+    // Usar fotos de demo estáticas para evitar confusión con fotos reales del usuario
+    setDemoPhotos(DEMO_PHOTOS);
+  }, []);
+
+  // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl);
+      if (designPreviewUrl && designPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(designPreviewUrl);
       }
+      // stripPreviewUrl usually comes from backend (base64 or url), but if it was a blob we'd clean it too
     };
-  }, [previewUrl]);
+  }, [designPreviewUrl]);
+
+  // Render real preview when enough demo photos exist
+  useEffect(() => {
+    const needs = getLayoutPhotoCount(formData.layout);
+    if (demoPhotos.length < needs) {
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setIsLoadingPreview(true);
+        const previewImage = await photoboothAPI.image.previewStrip({
+          photo_paths: demoPhotos.slice(0, needs),
+          design_path: undefined, // We don't send path, we might need to send the file if it's new? 
+          // Actually, for live preview of *new* upload, we might need to send the blob? 
+          // The current backend API might expect a path. 
+          // If selectedFile exists, we can't easily send it to previewStrip unless the API supports it.
+          // For now, we'll rely on the HTML preview for the design part if it's not saved yet,
+          // OR we accept that the "Real" preview won't show the new design until saved.
+          // BUT, to fix the bug, we MUST NOT set designPreviewUrl here.
+          layout: formData.layout,
+          design_position: formData.design_position,
+          background_color: formData.background_color,
+          photo_spacing: formData.photo_spacing,
+          photo_filter: formData.photo_filter,
+        });
+        setStripPreviewUrl(previewImage);
+      } catch (error) {
+        console.error('Error generando preview real:', error);
+      } finally {
+        setIsLoadingPreview(false);
+      }
+    }, 800); // Increased debounce to reduce flickering
+
+    return () => clearTimeout(timer);
+  }, [formData, demoPhotos, editingTemplate]);
 
   // Validation: Validate form data - Returns errors array
   const validateFormData = useCallback((data: FormData): ValidationError[] => {
@@ -211,16 +273,16 @@ export default function TemplateDialog({
 
     // Set file and create preview
     setSelectedFile(file);
-    
+
     // Revoke old preview URL
-    if (previewUrl && previewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previewUrl);
+    if (designPreviewUrl && designPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(designPreviewUrl);
     }
-    
-    // Create new preview URL
+
+    // Create new preview URL for the DESIGN FILE
     const newPreviewUrl = URL.createObjectURL(file);
-    setPreviewUrl(newPreviewUrl);
-  }, [validateFile, validateImageDimensions, toast, previewUrl]);
+    setDesignPreviewUrl(newPreviewUrl);
+  }, [validateFile, validateImageDimensions, toast, designPreviewUrl]);
 
   // Handler: Drag & drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -246,14 +308,14 @@ export default function TemplateDialog({
   // Handler: Remove file
   const handleRemoveFile = useCallback(() => {
     setSelectedFile(null);
-    if (previewUrl && previewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previewUrl);
+    if (designPreviewUrl && designPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(designPreviewUrl);
     }
-    setPreviewUrl(editingTemplate?.design_file_path 
+    setDesignPreviewUrl(editingTemplate?.design_file_path
       ? photoboothAPI.templates.getPreview(editingTemplate.id)
       : null
     );
-  }, [previewUrl, editingTemplate]);
+  }, [designPreviewUrl, editingTemplate]);
 
   // Handler: Submit form
   const handleSubmit = async () => {
@@ -286,7 +348,7 @@ export default function TemplateDialog({
           photo_spacing: formData.photo_spacing,
           photo_filter: formData.photo_filter,
         };
-        
+
         const newTemplate = await photoboothAPI.templates.create(templateData);
         templateId = newTemplate.id;
         toast.success('Template creado');
@@ -301,12 +363,13 @@ export default function TemplateDialog({
       // Success callback
       onSuccess();
       onOpenChange(false);
-      
+
       // Reset form
       setFormData(getInitialFormData());
       setSelectedFile(null);
-      setPreviewUrl(null);
-      
+      setDesignPreviewUrl(null);
+      setStripPreviewUrl(null);
+
     } catch (error: any) {
       console.error('Error saving template:', error);
       const message = error.response?.data?.detail || 'Error al guardar template';
@@ -330,7 +393,7 @@ export default function TemplateDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
       <DialogContent
-        className="max-w-7xl max-h-[95vh] overflow-y-auto p-8"
+        className="!w-[90vw] !max-w-[90vw] !h-[90vh] !max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 border-none shadow-2xl bg-background/95 backdrop-blur-xl"
         onKeyDown={(e) => {
           // Prevenir que Space active la cámara cuando estás escribiendo
           if (e.key === ' ' || e.code === 'Space') {
@@ -338,261 +401,307 @@ export default function TemplateDialog({
           }
         }}
       >
-        <DialogHeader>
-          <DialogTitle>
+        <DialogHeader className="px-8 py-6 border-b bg-background z-20">
+          <DialogTitle className="text-2xl">
             {editingTemplate ? 'Editar Template' : 'Nuevo Template'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-base">
             Define el layout y diseño para tus impresiones
           </DialogDescription>
         </DialogHeader>
 
-        {/* Layout de 2 columnas */}
-        <div className="grid grid-cols-2 gap-12 py-6">
-          {/* COLUMNA IZQUIERDA: Formulario */}
-          <div className="space-y-8">
-            {/* Template Name */}
-            <div className="space-y-2">
-            <Label htmlFor="name" className="text-base font-semibold">
-              Nombre del Template <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="name"
-              placeholder="Ej: Boda Elegante"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className={errors.find(e => e.field === 'name') ? 'border-destructive' : ''}
-            />
-            {errors.find(e => e.field === 'name') ? (
-              <p className="text-sm text-destructive">
-                {errors.find(e => e.field === 'name')?.message}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Un nombre descriptivo para identificar este template
-              </p>
-            )}
-          </div>
-
-          {/* Layout Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="layout" className="text-sm font-medium">Layout</Label>
-              <Select
-                value={formData.layout}
-                onValueChange={(value: LayoutType) =>
-                  setFormData({ ...formData, layout: value })
-                }
-              >
-                <SelectTrigger id="layout" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(LAYOUT_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {getPhotoCountDisplay()}
-              </p>
-            </div>
-
-            {/* Design Position */}
-            <div className="space-y-2">
-              <Label htmlFor="design_position" className="text-sm font-medium">Posición del Diseño</Label>
-              <Select
-                value={formData.design_position}
-                onValueChange={(value: DesignPositionType) =>
-                  setFormData({ ...formData, design_position: value })
-                }
-              >
-                <SelectTrigger id="design_position" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(DESIGN_POSITION_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Styling Options */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Background Color */}
-            <div className="space-y-2">
-              <Label htmlFor="background_color" className="text-sm font-medium">Color de Fondo</Label>
-              <div className="flex gap-2">
+        <div className="flex-1 overflow-hidden grid grid-cols-12 h-full">
+          {/* COLUMNA IZQUIERDA: Formulario (Scrollable) */}
+          <div className="col-span-12 lg:col-span-4 overflow-y-auto p-10 border-r bg-card/50">
+            <div className="space-y-10 mx-auto">
+              {/* Nombre */}
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-base font-semibold">
+                  Nombre del Template <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  id="background_color"
-                  type="color"
-                  value={formData.background_color}
-                  onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
-                  className="w-20 h-10 p-1"
+                  id="name"
+                  placeholder="Ej: Boda Elegante"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={errors.find(e => e.field === 'name') ? 'border-destructive' : ''}
                 />
-                <Input
-                  type="text"
-                  value={formData.background_color}
-                  onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
-                  placeholder="#FFFFFF"
-                  className="flex-1"
+                {errors.find(e => e.field === 'name') ? (
+                  <p className="text-sm text-destructive">
+                    {errors.find(e => e.field === 'name')?.message}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Un nombre descriptivo para identificar este template
+                  </p>
+                )}
+              </div>
+
+              {/* Arte / Diseño */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-semibold">Arte</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Sube tu marco/overlay (PNG/JPG 4:3)
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="px-3 py-1">Archivo 4:3</Badge>
+                </div>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => !isSubmitting && fileInputRef.current?.click()}
+                  className={`
+                    relative overflow-hidden
+                    border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
+                    transition-all duration-300 ease-out
+                    ${isDragging
+                      ? 'border-primary bg-primary/10 scale-[1.02] shadow-lg'
+                      : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-muted/50'
+                    }
+                    ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                >
+                  {isSubmitting ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <p className="text-sm text-muted-foreground">Subiendo diseño...</p>
+                    </div>
+                  ) : designPreviewUrl ? (
+                    <div className="relative group">
+                      <img
+                        src={designPreviewUrl}
+                        alt="Preview"
+                        className="max-h-40 mx-auto rounded-lg shadow-sm object-contain"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                        <p className="text-white text-sm font-medium">Cambiar diseño</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFile();
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm">
+                        {isLoadingPreview ? 'Generando preview...' : 'Arrastra tu diseño aquí'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        o haz click para seleccionar (máx {MAX_FILE_SIZE_MB}MB)
+                      </p>
+                    </>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
                 />
               </div>
-            </div>
 
-            {/* Photo Spacing */}
-            <div className="space-y-2">
-              <Label htmlFor="photo_spacing" className="text-sm font-medium">
-                Espaciado ({MIN_PHOTO_SPACING}-{MAX_PHOTO_SPACING}px)
-              </Label>
-              <Input
-                id="photo_spacing"
-                type="number"
-                min={MIN_PHOTO_SPACING}
-                max={MAX_PHOTO_SPACING}
-                value={formData.photo_spacing}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  photo_spacing: parseInt(e.target.value) || DEFAULT_PHOTO_SPACING 
-                })}
-                className={errors.find(e => e.field === 'photo_spacing') ? 'border-destructive' : ''}
-              />
-            </div>
-
-            {/* Photo Filter (look de las fotos) */}
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="photo_filter" className="text-sm font-medium">Filtro de fotos</Label>
-              <Select
-                value={formData.photo_filter}
-                onValueChange={(value: FormData['photo_filter']) =>
-                  setFormData({ ...formData, photo_filter: value })
-                }
-              >
-                <SelectTrigger id="photo_filter" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin filtro</SelectItem>
-                  <SelectItem value="bw">Blanco y negro</SelectItem>
-                  <SelectItem value="sepia">Sepia cálido</SelectItem>
-                  <SelectItem value="glam">Glam / Belleza suave</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Este filtro se aplicará a las fotos de este diseño en cámara, preview y tira final.
-              </p>
-            </div>
-          </div>
-
-          {/* Design Upload */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Diseño de Canva (PNG/JPG)</Label>
-            <p className="text-xs text-muted-foreground">
-              Sube tu diseño personalizado para incluir en el strip de fotos
-            </p>
-
-            {/* Upload Zone */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => !isSubmitting && fileInputRef.current?.click()}
-              className={`
-                border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
-                transition-all duration-200
-                ${isDragging ? 'border-primary bg-primary/10 scale-105' : 'border-muted-foreground/25 hover:border-primary'}
-                ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-            >
-              {isSubmitting ? (
-                <div className="flex flex-col items-center gap-2">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  <p className="text-sm text-muted-foreground">Subiendo diseño...</p>
+              {/* Layout y apariencia */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Layout y apariencia</Label>
+                  <Badge variant="outline" className="text-xs">
+                    {getPhotoCountDisplay()}
+                  </Badge>
                 </div>
-              ) : previewUrl ? (
-                <div className="relative">
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="max-h-32 mx-auto rounded"
-                  />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="absolute top-0 right-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveFile();
-                    }}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+                {/* Layout Selection */}
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <Label htmlFor="layout" className="text-sm font-medium">Layout</Label>
+                    <Select
+                      value={formData.layout}
+                      onValueChange={(value: LayoutType) =>
+                        setFormData({ ...formData, layout: value })
+                      }
+                    >
+                      <SelectTrigger id="layout" className="w-full h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(LAYOUT_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {getPhotoCountDisplay()}
+                    </p>
+                  </div>
+
+                  {/* Design Position */}
+                  <div className="space-y-3">
+                    <Label htmlFor="design_position" className="text-sm font-medium">Posición del Diseño</Label>
+                    <Select
+                      value={formData.design_position}
+                      onValueChange={(value: DesignPositionType) =>
+                        setFormData({ ...formData, design_position: value })
+                      }
+                    >
+                      <SelectTrigger id="design_position" className="w-full h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(DESIGN_POSITION_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm">Arrastra tu diseño aquí</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    o haz click para seleccionar (máx {MAX_FILE_SIZE_MB}MB)
-                  </p>
-                </>
-              )}
+
+                {/* Styling Options */}
+                <div className="grid grid-cols-2 gap-8">
+                  {/* Background Color */}
+                  <div className="space-y-3">
+                    <Label htmlFor="background_color" className="text-sm font-medium">Color de Fondo</Label>
+                    <div className="flex gap-3">
+                      <Input
+                        id="background_color"
+                        type="color"
+                        value={formData.background_color}
+                        onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
+                        className="w-14 h-11 p-1 cursor-pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.background_color}
+                        onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
+                        placeholder="#FFFFFF"
+                        className="flex-1 h-11 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Photo Spacing */}
+                  <div className="space-y-3">
+                    <Label htmlFor="photo_spacing" className="text-sm font-medium">
+                      Espaciado ({MIN_PHOTO_SPACING}-{MAX_PHOTO_SPACING}px)
+                    </Label>
+                    <Input
+                      id="photo_spacing"
+                      type="number"
+                      min={MIN_PHOTO_SPACING}
+                      max={MAX_PHOTO_SPACING}
+                      value={formData.photo_spacing}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        photo_spacing: parseInt(e.target.value, 10) || DEFAULT_PHOTO_SPACING
+                      })}
+                      className={`h-11 ${errors.find(e => e.field === 'photo_spacing') ? 'border-destructive' : ''}`}
+                    />
+                  </div>
+
+                  {/* Photo Filter */}
+                  <div className="space-y-3 col-span-2">
+                    <Label htmlFor="photo_filter" className="text-sm font-medium">Filtro de fotos</Label>
+                    <Select
+                      value={formData.photo_filter}
+                      onValueChange={(value: FormData['photo_filter']) =>
+                        setFormData({ ...formData, photo_filter: value })
+                      }
+                    >
+                      <SelectTrigger id="photo_filter" className="w-full h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin filtro</SelectItem>
+                        <SelectItem value="bw">Blanco y negro</SelectItem>
+                        <SelectItem value="sepia">Sepia cálido</SelectItem>
+                        <SelectItem value="glam">Glam / Belleza suave</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Este filtro se aplicará a las fotos de este diseño en cámara, preview y tira final.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelect(file);
-              }}
-            />
-          </div>
           </div>
           {/* FIN COLUMNA IZQUIERDA */}
 
-          {/* COLUMNA DERECHA: Preview Grande */}
-          <div className="space-y-4">
-            <div className="sticky top-0 bg-background pb-4 z-10">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-lg font-semibold">Vista Previa</Label>
-                <Badge variant="outline" className="text-xs">
-                  {getPhotoCountDisplay()}
-                </Badge>
+          {/* COLUMNA DERECHA: Preview Grande (Fixed/Sticky) */}
+          <div className="col-span-12 lg:col-span-7 bg-muted/10 p-12 flex flex-col h-full overflow-hidden relative">
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+              style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '30px 30px' }}
+            />
+
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <div>
+                <Label className="text-xl font-semibold">Vista previa en vivo</Label>
+                <p className="text-sm text-muted-foreground">
+                  Así se verá tu strip de fotos
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Así se verá tu strip de fotos
-              </p>
+              <Badge variant="outline" className="text-sm px-3 py-1 bg-background">
+                {getPhotoCountDisplay()}
+              </Badge>
             </div>
 
-            {/* Preview Container */}
-            <div className="relative border-2 border-border rounded-xl p-8 bg-muted/30 flex items-center justify-center min-h-[700px]">
-                <Badge variant="secondary" className="absolute top-4 right-4 text-xs">
-                  Strip 2x6"
-                </Badge>
-                <div
-                  className="relative bg-white rounded-lg shadow-2xl transition-all duration-300"
-                  style={{
-                    width: '400px',
-                    backgroundColor: formData.background_color
-                  }}
-                >
-                  {/* Renderizar preview según layout */}
+            {/* Preview Container - Centered and Scaled */}
+            <div className="flex-1 flex items-center justify-center relative z-10 overflow-hidden p-4">
+              <div
+                className="relative transition-all duration-500 transform hover:scale-[1.01]"
+                style={{
+                  height: '100%',
+                  maxHeight: '800px',
+                  aspectRatio: '2/6', // Standard strip ratio approximation
+                  backgroundColor: formData.background_color,
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.05)'
+                }}
+              >
+                {/* Si tenemos el strip generado por backend, lo mostramos encima de todo */}
+                {stripPreviewUrl && (
+                  <div className="absolute inset-0 z-20 bg-white animate-in fade-in duration-500">
+                    <img
+                      src={stripPreviewUrl}
+                      alt="Final Strip Preview"
+                      className="w-full h-full object-contain"
+                    />
+                    {isLoadingPreview && (
+                      <div className="absolute top-2 right-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* HTML Skeleton (Fallback & Live Edit) */}
+                <div className={`w-full h-full flex flex-col ${stripPreviewUrl ? 'opacity-0' : 'opacity-100'}`}>
+
                   {formData.layout === '3x1-vertical' && (
-                    <div className="space-y-3 p-4">
+                    <div
+                      className="flex flex-col h-full p-4"
+                      style={{ gap: `${formData.photo_spacing / 2}px` }} // Scaled gap approximation
+                    >
                       {formData.design_position === 'top' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover rounded" />
+                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20 shrink-0">
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover rounded" />
                           ) : (
                             <div className="flex flex-col items-center gap-2 text-primary">
                               <Upload className="w-8 h-8" />
@@ -601,15 +710,19 @@ export default function TemplateDialog({
                           )}
                         </div>
                       )}
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="bg-muted aspect-[4/3] rounded-lg flex items-center justify-center text-lg font-bold text-muted-foreground border-2 border-border transition-all duration-300">
-                          Foto {i}
-                        </div>
-                      ))}
+                      {stripPreviewUrl ? (
+                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg flex-1" />
+                      ) : (
+                        [1, 2, 3].map((i) => (
+                          <div key={i} className="bg-muted flex-1 rounded-lg flex items-center justify-center text-lg font-bold text-muted-foreground border-2 border-border transition-all duration-300">
+                            Foto {i}
+                          </div>
+                        ))
+                      )}
                       {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover rounded" />
+                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-28 rounded-lg flex items-center justify-center text-sm font-medium overflow-hidden border-2 border-primary/20 shrink-0">
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover rounded" />
                           ) : (
                             <div className="flex flex-col items-center gap-2 text-primary">
                               <Upload className="w-8 h-8" />
@@ -620,27 +733,34 @@ export default function TemplateDialog({
                       )}
                     </div>
                   )}
-                  
+
                   {formData.layout === '4x1-vertical' && (
-                    <div className="space-y-2 p-3">
+                    <div
+                      className="flex flex-col h-full p-3"
+                      style={{ gap: `${formData.photo_spacing / 2}px` }}
+                    >
                       {formData.design_position === 'top' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover" />
+                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20 shrink-0">
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
                           ) : (
                             'Tu Diseño'
                           )}
                         </div>
                       )}
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-base font-semibold text-muted-foreground border border-border transition-all duration-300">
-                          Foto {i}
-                        </div>
-                      ))}
+                      {stripPreviewUrl ? (
+                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg flex-1" />
+                      ) : (
+                        [1, 2, 3, 4].map((i) => (
+                          <div key={i} className="bg-muted flex-1 rounded flex items-center justify-center text-base font-semibold text-muted-foreground border border-border transition-all duration-300">
+                            Foto {i}
+                          </div>
+                        ))
+                      )}
                       {formData.design_position === 'bottom' && (
-                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover" />
+                        <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20 shrink-0">
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
                           ) : (
                             'Tu Diseño'
                           )}
@@ -648,27 +768,31 @@ export default function TemplateDialog({
                       )}
                     </div>
                   )}
-                  
+
                   {formData.layout === '6x1-vertical' && (
                     <div className="space-y-1.5 p-2">
                       {formData.design_position === 'top' && (
                         <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-16 rounded flex items-center justify-center text-[10px] font-medium overflow-hidden border border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover" />
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
                           ) : (
                             'Diseño'
                           )}
                         </div>
                       )}
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-xs font-semibold text-muted-foreground border border-border transition-all duration-300">
-                          {i}
-                        </div>
-                      ))}
+                      {stripPreviewUrl ? (
+                        <img src={stripPreviewUrl} alt="Preview strip" className="w-full h-full object-contain rounded-lg" />
+                      ) : (
+                        [1, 2, 3, 4, 5, 6].map((i) => (
+                          <div key={i} className="bg-muted aspect-[4/3] rounded flex items-center justify-center text-xs font-semibold text-muted-foreground border border-border transition-all duration-300">
+                            {i}
+                          </div>
+                        ))
+                      )}
                       {formData.design_position === 'bottom' && (
                         <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-16 rounded flex items-center justify-center text-[10px] font-medium overflow-hidden border border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover" />
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
                           ) : (
                             'Diseño'
                           )}
@@ -676,7 +800,7 @@ export default function TemplateDialog({
                       )}
                     </div>
                   )}
-                  
+
                   {formData.layout === '2x2-grid' && (
                     <div className="p-3">
                       <div className="grid grid-cols-2 gap-2 mb-2">
@@ -688,8 +812,8 @@ export default function TemplateDialog({
                       </div>
                       {formData.design_position === 'bottom' && (
                         <div className="bg-gradient-to-br from-primary/30 to-primary/10 h-20 rounded flex items-center justify-center text-xs font-medium overflow-hidden border border-primary/20">
-                          {previewUrl ? (
-                            <img src={previewUrl} alt="Design" className="w-full h-full object-cover" />
+                          {designPreviewUrl ? (
+                            <img src={designPreviewUrl} alt="Design" className="w-full h-full object-cover" />
                           ) : (
                             'Tu Diseño'
                           )}
@@ -699,33 +823,33 @@ export default function TemplateDialog({
                   )}
                 </div>
               </div>
-              
-              {/* Info del template */}
-              <div className="mt-4 p-4 bg-muted rounded-lg">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Layout:</span>
-                    <p className="font-medium">{LAYOUT_LABELS[formData.layout]}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Fotos:</span>
-                    <p className="font-medium">{getPhotoCountDisplay()}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Posición:</span>
-                    <p className="font-medium">{DESIGN_POSITION_LABELS[formData.design_position]}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Espaciado:</span>
-                    <p className="font-medium">{formData.photo_spacing}px</p>
-                  </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-muted rounded-lg relative z-10">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Layout:</span>
+                  <p className="font-medium">{LAYOUT_LABELS[formData.layout]}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Fotos:</span>
+                  <p className="font-medium">{getPhotoCountDisplay()}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Posición:</span>
+                  <p className="font-medium">{DESIGN_POSITION_LABELS[formData.design_position]}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Espaciado:</span>
+                  <p className="font-medium">{formData.photo_spacing}px</p>
                 </div>
               </div>
+            </div>
           </div>
           {/* FIN COLUMNA DERECHA */}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-8 py-4 border-t bg-background z-20">
           <Button
             type="button"
             variant="ghost"

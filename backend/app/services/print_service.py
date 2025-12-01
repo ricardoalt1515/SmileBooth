@@ -215,8 +215,12 @@ class PrintService:
         
         system = platform.system()
         settings = load_settings()
-        media_option = "Custom.4x6in" if settings.paper_size == "4x6" else "Custom.5x7in"
-        media_size = (1016, 1524) if settings.paper_size == "4x6" else (1270, 1778)  # tenths of millimeters
+        media_options = {
+            "2x6": ("Custom.2x6in", (508, 1524)),    # 2x6 pulgadas
+            "4x6": ("Custom.4x6in", (1016, 1524)),   # tenths of millimeters
+            "5x7": ("Custom.5x7in", (1270, 1778)),
+        }
+        media_option, media_size = media_options.get(settings.paper_size, media_options["4x6"])
 
         try:
             if system == "Darwin":  # macOS

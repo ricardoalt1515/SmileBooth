@@ -65,6 +65,7 @@ class ImageJobQueueService:
     DB_FILE: Path = DATA_DIR / "config" / "image_jobs.json"
     MAX_JOBS = 200
     CLEANUP_DAYS = 7
+    _worker_started = False
 
     @classmethod
     def _load(cls) -> Dict[str, ImageJobRecord]:
@@ -157,3 +158,68 @@ class ImageJobQueueService:
             return
         bounded = cls._bounded_jobs(jobs)
         cls._save(bounded)
+
+    @classmethod
+    def process_pending_jobs(cls) -> None:
+        """Procesa un job pending si existe, actualizando su estado."""
+        jobs = cls._load()
+        if not jobs:
+            return
+
+        pending = [job for job in jobs.values() if job.status == "pending"]
+        if not pending:
+            return
+
+        pending.sort(key=lambda j: j.created_at)
+        job = pending[0]
+
+        job.status = "processing"
+        job.updated_at = datetime.now().isoformat()
+        jobs[job.job_id] = job
+        jobs = cls._bounded_jobs(jobs)
+        cls._save(jobs)
+
+        # Ejecutar composición con la misma lógica que el endpoint
+        from app.api.image import ComposeStripRequest, _compose_strip_core  # lazy import to avoid cycles
+        try:
+            request_model = ComposeStripRequest(**job.payload)
+        except Exception as exc:
+            job.status = "failed"
+            job.error = f"Payload inválido: {exc}"
+            job.updated_at = datetime.now().isoformat()
+            jobs[job.job_id] = job
+            cls._save(cls._bounded_jobs(jobs))
+            return
+
+        try:
+            result = _compose_strip_core(request_model)
+            job.status = "completed"
+            job.result = result.model_dump()
+            job.error = None
+        except Exception as exc:
+            job.status = "failed"
+            job.error = str(exc)
+        finally:
+            job.updated_at = datetime.now().isoformat()
+            jobs[job.job_id] = job
+            cls._save(cls._bounded_jobs(jobs))
+
+    @classmethod
+    def start_worker(cls, interval_seconds: int = 1) -> None:
+        """Lanza un hilo en segundo plano que procesa jobs pending."""
+        if cls._worker_started:
+            return
+        cls._worker_started = True
+
+        def _loop():
+            import time
+            while True:
+                try:
+                    cls.process_pending_jobs()
+                except Exception as exc:  # pragma: no cover - defensivo
+                    print(f"Error en worker de image jobs: {exc}")
+                time.sleep(interval_seconds)
+
+        import threading
+        thread = threading.Thread(target=_loop, name="image-jobs-worker", daemon=True)
+        thread.start()

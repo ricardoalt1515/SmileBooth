@@ -6,6 +6,7 @@ import photoboothAPI from '../services/api';
 import { useAudio, useSoundEffects } from '../hooks/useAudio';
 import { Button } from '@/components/ui/button';
 import Confetti from '../components/Confetti';
+import { API_BASE_URL } from '../config/constants';
 
 export default function SuccessScreen() {
   const {
@@ -14,12 +15,18 @@ export default function SuccessScreen() {
     stripImageUrl,  // full_page_path (formato 2x para imprimir)
     sessionId,
     autoResetSeconds,
+    printCopies,
+    printMode,
+    paperSize,
+    defaultPrinter,
     reset,
     setCurrentScreen,
   } = useAppStore();
 
   const [countdown, setCountdown] = useState(autoResetSeconds || 30);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [selectedCopies, setSelectedCopies] = useState(printCopies || 1);
   const { speak } = useAudio();
   const { playSuccess } = useSoundEffects();
   const toast = useToastContext();
@@ -61,7 +68,7 @@ export default function SuccessScreen() {
     }, 500);
   };
 
-  const handlePrint = async () => {
+  const handlePrint = async (copiesToPrint?: number) => {
     const pathToPrint = stripImageUrl || stripId;
 
     if (!pathToPrint) {
@@ -75,12 +82,12 @@ export default function SuccessScreen() {
       speak('Enviando a impresora. Espera un momento.', { rate: 1.1 });
 
       // 1) Intentar reimpresión basada en sesión (para tracking y metadata)
-      if (sessionId) {
-        try {
-          const reprintResponse = await photoboothAPI.sessions.reprint(sessionId, {
-            copies: 1,
-            file_path: pathToPrint,
-          });
+          if (sessionId) {
+            try {
+              const reprintResponse = await photoboothAPI.sessions.reprint(sessionId, {
+                copies: copiesToPrint ?? printCopies ?? 1,
+                file_path: pathToPrint,
+              });
           console.log('✅ Reimpresión por sesión:', reprintResponse);
           speak('Impresión enviada. Recoge tus fotos en la impresora.', { rate: 1.0 });
           toast.success('¡Impresión enviada desde la sesión actual!');
@@ -93,7 +100,7 @@ export default function SuccessScreen() {
       // 2) Fallback robusto: impresión directa del archivo
       const printResponse = await photoboothAPI.print.queue({
         file_path: pathToPrint,
-        copies: 1,
+        copies: copiesToPrint ?? printCopies ?? 1,
       });
 
       console.log('✅ Impresión directa enviada:', printResponse);
@@ -209,7 +216,10 @@ export default function SuccessScreen() {
         {/* Action buttons using shadcn Button */}
         <div className="flex gap-6 mb-8 flex-wrap justify-center">
           <Button
-            onClick={handlePrint}
+            onClick={() => {
+              setSelectedCopies(printCopies || 1);
+              setShowPrintPreview(true);
+            }}
             disabled={isPrinting}
             size="lg"
             className="
@@ -271,6 +281,100 @@ export default function SuccessScreen() {
             O presiona "Nueva Sesión" para comenzar ahora
           </p>
         </div>
+
+        {showPrintPreview && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <div>
+                  <p className="text-sm text-white/60">Confirmar impresión</p>
+                  <h2 className="text-2xl font-bold text-white">Revisa antes de enviar</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintPreview(false)}
+                  className="text-white/60 hover:text-white transition-colors"
+                  aria-label="Cerrar"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                <div className="flex items-center justify-center bg-white/5 rounded-xl p-4">
+                  {stripImageUrl || stripId ? (
+                    <img
+                      src={(stripImageUrl || stripId || '').startsWith('http')
+                        ? (stripImageUrl || stripId || '')
+                        : `${API_BASE_URL}${stripImageUrl || stripId}`}
+                      alt="Preview de impresión"
+                      className="max-h-[60vh] w-auto object-contain rounded-lg shadow-lg"
+                    />
+                  ) : (
+                    <p className="text-white/60">No hay imagen lista para imprimir.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <p className="text-white text-lg font-semibold">Copias</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={6}
+                        value={selectedCopies}
+                        onChange={(e) => setSelectedCopies(parseInt(e.target.value, 10))}
+                        className="flex-1"
+                      />
+                      <span className="text-xl font-bold text-primary w-10 text-center">
+                        {selectedCopies}
+                      </span>
+                    </div>
+                    <div className="text-sm text-white/70 space-y-1">
+                      <p>
+                        Modo: <span className="font-semibold text-white">{printMode === 'dual-strip' ? 'Dos tiras en 4x6' : 'Una tira'}</span>
+                      </p>
+                      <p>
+                        Papel: <span className="font-semibold text-white">{paperSize}</span>
+                      </p>
+                      <p>
+                        Impresora:{' '}
+                        <span className="font-semibold text-white">
+                          {defaultPrinter || 'Predeterminada del sistema'}
+                        </span>
+                      </p>
+                    </div>
+                    <p className="text-sm text-white/50">
+                      Usa la impresora configurada en ajustes. Confirma antes de enviar.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      className="flex-1 py-3"
+                      disabled={isPrinting}
+                      onClick={async () => {
+                        setShowPrintPreview(false);
+                        await handlePrint(selectedCopies);
+                      }}
+                    >
+                      <Printer className="w-4 h-4 mr-2" />
+                      Confirmar impresión
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 py-3"
+                      onClick={() => setShowPrintPreview(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

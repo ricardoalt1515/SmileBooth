@@ -31,7 +31,7 @@ class Settings(BaseModel):
         default="dual-strip",
         description="Print mode: single strip or dual strips side-by-side"
     )
-    paper_size: Literal["4x6", "5x7"] = Field(default="4x6", description="Target paper size for printing")
+    paper_size: Literal["2x6", "4x6", "5x7"] = Field(default="4x6", description="Target paper size for printing")
     photo_spacing: int = Field(default=20, ge=0, le=100, description="Spacing between photos in pixels")
     strip_width: int = Field(default=600, ge=400, le=800, description="Strip width in pixels")
     strip_height: int = Field(default=1800, ge=1200, le=2400, description="Strip height in pixels")
@@ -67,7 +67,7 @@ class SettingsUpdate(BaseModel):
     photo_filter: Optional[str] = None
     strip_layout: Optional[Literal["vertical-3", "vertical-4", "vertical-6", "grid-2x2"]] = None
     print_mode: Optional[Literal["single", "dual-strip"]] = None
-    paper_size: Optional[Literal["4x6", "5x7"]] = None
+    paper_size: Optional[Literal["2x6", "4x6", "5x7"]] = None
     photo_spacing: Optional[int] = Field(default=None, ge=0, le=100)
     strip_width: Optional[int] = Field(default=None, ge=400, le=800)
     strip_height: Optional[int] = Field(default=None, ge=1200, le=2400)

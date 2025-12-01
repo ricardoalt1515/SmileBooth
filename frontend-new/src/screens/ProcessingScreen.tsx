@@ -74,8 +74,8 @@ export default function ProcessingScreen() {
         let stripResponse = job.result;
 
         if (!stripResponse || job.status !== 'completed') {
-          // Pequeño bucle de polling para cuando el trabajo sea realmente asíncrono
-          for (let i = 0; i < 10; i += 1) {
+          // Polling para jobs asincrónicos: espera hasta 10s antes de fallar
+          for (let i = 0; i < 20; i += 1) {
             await new Promise((resolve) => setTimeout(resolve, 500));
             const status = await photoboothAPI.image.getComposeJobStatus(job.job_id);
             if (status.status === 'completed' && status.result) {

@@ -134,6 +134,8 @@ async def test_print(printer_name: str | None = None):
 
         if settings.paper_size == "5x7":
             width, height = (1400, 2000)
+        elif settings.paper_size == "2x6":
+            width, height = (600, 1800)
         else:
             width, height = (1200, 1800)
         ticket = Image.new("RGB", (width, height), "white")

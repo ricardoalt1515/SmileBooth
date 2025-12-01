@@ -17,7 +17,7 @@ export interface PrintJob {
   file_path: string;
   printer_name: string | null;
   copies: number;
-  status: string;
+  status: 'pending' | 'processing' | 'sent' | 'failed';
   error?: string | null;
   created_at: string;
   updated_at: string;
@@ -75,7 +75,9 @@ interface AppState {
   cameraWidth: number;
   cameraHeight: number;
   printMode: 'single' | 'dual-strip';
-  paperSize: '4x6' | '5x7';
+  paperSize: '2x6' | '4x6' | '5x7';
+  defaultPrinter: string | null;
+  defaultPrinter: string | null;
   loadSettings: (settings: {
     photos_to_take?: number;
     countdown_seconds?: number;
@@ -91,7 +93,8 @@ interface AppState {
     camera_width?: number;
     camera_height?: number;
     print_mode?: 'single' | 'dual-strip';
-    paper_size?: '4x6' | '5x7';
+    paper_size?: '2x6' | '4x6' | '5x7';
+    default_printer?: string | null;
   }) => void;
   setSettings: (settings: Partial<Pick<AppState,
     'countdownSeconds' |
@@ -109,6 +112,7 @@ interface AppState {
     'cameraHeight' |
     'printMode' |
     'paperSize' |
+    'defaultPrinter' |
     'selectedVoiceURI' |
     'photoFilter'
   >>) => void;
@@ -155,6 +159,7 @@ const initialState = {
   cameraHeight: 720,
   printMode: 'dual-strip' as const,
   paperSize: '4x6' as const,
+  defaultPrinter: null,
   isBackendConnected: false,
   logs: [] as AppLog[],
 };
@@ -213,6 +218,7 @@ export const useAppStore = create<AppState>((set) => ({
     cameraHeight: settings.camera_height ?? initialState.cameraHeight,
     printMode: settings.print_mode ?? initialState.printMode,
     paperSize: settings.paper_size ?? initialState.paperSize,
+    defaultPrinter: settings.default_printer ?? initialState.defaultPrinter,
   }),
 
   setSettings: (settings) => set(settings),

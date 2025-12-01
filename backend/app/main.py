@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
     from app.logging_config import logger
     from app.services.print_queue import PrintQueueService
     from app.services.image_jobs import ImageJobQueueService
+    from app.services.demo_assets import ensure_demo_photos
 
     logger.info("🚀 PhotoBooth API iniciando...")
     print(f"📡 Servidor: http://{API_CONFIG['host']}:{API_CONFIG['port']}")
@@ -42,13 +43,18 @@ async def lifespan(app: FastAPI):
 
     # Limpieza ligera de colas persistentes al arranque
     try:
-      PrintQueueService.cleanup_old_jobs()
+        PrintQueueService.cleanup_old_jobs()
     except Exception:
-      logger.warning("No se pudo limpiar print_jobs al iniciar")
+        logger.warning("No se pudo limpiar print_jobs al iniciar")
     try:
-      ImageJobQueueService.cleanup_old_jobs()
+        ImageJobQueueService.cleanup_old_jobs()
+        ImageJobQueueService.start_worker()
     except Exception:
-      logger.warning("No se pudo limpiar image_jobs al iniciar")
+        logger.warning("No se pudo limpiar image_jobs al iniciar")
+    try:
+        ensure_demo_photos()
+    except Exception:
+        logger.warning("No se pudieron generar fotos demo")
     
     yield
     

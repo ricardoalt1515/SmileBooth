@@ -21,7 +21,7 @@ export interface BackendSettings {
   camera_width?: number;
   camera_height?: number;
   print_mode?: 'single' | 'dual-strip';
-  paper_size?: '4x6' | '5x7';
+  paper_size?: '2x6' | '4x6' | '5x7';
   strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
   photo_spacing?: number;
   photo_filter?: string | null;
@@ -349,7 +349,7 @@ export const photoboothAPI = {
       mirror_preview?: boolean;
       kiosk_mode?: boolean;
       print_mode?: 'single' | 'dual-strip';
-      paper_size?: '4x6' | '5x7';
+      paper_size?: '2x6' | '4x6' | '5x7';
       strip_layout?: 'vertical-3' | 'vertical-4' | 'vertical-6' | 'grid-2x2';
       photo_spacing?: number;
       photo_filter?: string | null;
@@ -582,6 +582,12 @@ export const photoboothAPI = {
     activate: async (templateId: string) => {
       const response = await apiClient.post(`/api/templates/${templateId}/activate`);
       return response.data; // { success, message, template }
+    },
+    duplicate: async (templateId: string, newName?: string) => {
+      const response = await apiClient.post(`/api/templates/${templateId}/duplicate`, {
+        new_name: newName || undefined,
+      });
+      return response.data; // Template object
     },
     uploadDesign: async (templateId: string, file: File) => {
       const formData = new FormData();

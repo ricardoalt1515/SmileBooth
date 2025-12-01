@@ -1,17 +1,4 @@
 {
-  "template_20251109_133333": {
-    "id": "template_20251109_133333",
-    "name": "bodaxv",
-    "layout": "3x1-vertical",
-    "design_file_path": null,
-    "design_position": "bottom",
-    "background_color": "#FFFFFF",
-    "photo_spacing": 20,
-    "photo_filter": "none",
-    "is_active": false,
-    "created_at": "2025-11-09T13:33:33.588616",
-    "preview_url": null
-  },
   "template_20251109_154511": {
     "id": "template_20251109_154511",
     "name": "asad",

@@ -476,6 +476,40 @@ async def delete_template(template_id: str):
         raise HTTPException(500, f"Error deleting template: {str(e)}")
 
 
+@router.post("/{template_id}/duplicate", response_model=Template)
+async def duplicate_template(template_id: str):
+    """
+    Crea una copia de un template con nuevo ID y nombre.
+
+    No duplica archivos físicos; reutiliza las rutas de diseño existentes.
+    """
+    try:
+        templates = load_templates_db()
+        if template_id not in templates:
+            raise HTTPException(404, f"Template not found: {template_id}")
+
+        original = templates[template_id]
+        new_id = str(uuid.uuid4())[:8]
+        copy_name = f"{original.name} (Copia)"
+
+        duplicated = original.model_copy(update={
+            "id": new_id,
+            "name": copy_name,
+            "is_active": False,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        })
+
+        templates[new_id] = duplicated
+        save_templates_db(templates)
+
+        return duplicated
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error duplicating template: {str(e)}")
+
+
 @router.get("/{template_id}/preview")
 async def get_template_preview(template_id: str):
     """

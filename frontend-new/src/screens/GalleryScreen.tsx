@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera, Folder } from 'lucide-react';
+import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera, Folder, Printer } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI, { API_BASE_URL } from '../services/api';
@@ -44,7 +44,7 @@ type SessionBlock = {
 };
 
 export default function GalleryScreen() {
-  const { setCurrentScreen } = useAppStore();
+  const { setCurrentScreen, printCopies } = useAppStore();
   const toast = useToastContext();
 
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -163,6 +163,22 @@ export default function GalleryScreen() {
     } catch (error) {
       console.error('Error exportando sesión:', error);
       toast.error('No se pudo exportar la sesión');
+    }
+  };
+
+  const handleReprintSession = async (sessionId: string) => {
+    try {
+      setIsPrinting(true);
+      const response = await photoboothAPI.sessions.reprint(sessionId, {
+        copies: printCopies || 1,
+      });
+      console.log('✅ Reimpresión de sesión desde galería:', response);
+      toast.success('Reimpresión enviada');
+    } catch (error) {
+      console.error('Error reimprimiendo sesión:', error);
+      toast.error('No se pudo reimprimir la sesión');
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -452,6 +468,14 @@ export default function GalleryScreen() {
                   >
                     <Download className="w-4 h-4" />
                     ZIP sesión
+                  </button>
+                  <button
+                    onClick={() => handleReprintSession(session.session_id)}
+                    disabled={isPrinting}
+                    className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Printer className="w-4 h-4" />
+                    {isPrinting ? 'Enviando...' : 'Reimprimir'}
                   </button>
                 </div>
                 {(session.strip_url || session.full_strip_url) && (

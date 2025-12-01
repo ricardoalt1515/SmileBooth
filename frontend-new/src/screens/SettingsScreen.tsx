@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   Calendar
 } from 'lucide-react';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, type PrintJob } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI from '../services/api';
 import { API_BASE_URL } from '../config/constants';
@@ -81,7 +81,7 @@ export default function SettingsScreen() {
     print_copies: 2,
     camera_width: 1280,
     camera_height: 720,
-    paper_size: '4x6' as '4x6' | '5x7',
+    paper_size: '4x6' as '2x6' | '4x6' | '5x7',
   });
   const [uiPreferences, setUiPreferences] = useState({
     mirror_preview: mirrorPreview,
@@ -97,6 +97,9 @@ export default function SettingsScreen() {
   const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
 
   // Active template info (para mostrar ayuda sobre fotos esperadas por diseño)
   const [activeTemplate, setActiveTemplate] = useState<Template | null>(null);
@@ -200,6 +203,33 @@ export default function SettingsScreen() {
       savePrinter();
     }
   }, [selectedPrinter]);
+
+  const loadPrintJobs = async () => {
+    try {
+      setIsLoadingJobs(true);
+      const jobs = await photoboothAPI.print.listJobs();
+      setPrintJobs(jobs);
+    } catch (error) {
+      console.error('Error cargando trabajos de impresión:', error);
+      toast.error('No se pudo cargar la cola de impresión');
+    } finally {
+      setIsLoadingJobs(false);
+    }
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    try {
+      setRetryingJobId(jobId);
+      await photoboothAPI.print.retryJob(jobId);
+      toast.success('Reintento enviado');
+      await loadPrintJobs();
+    } catch (error) {
+      console.error('Error reintentando trabajo de impresión:', error);
+      toast.error('No se pudo reintentar el trabajo');
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
 
   useEffect(() => {
     setSettings({
@@ -351,7 +381,10 @@ export default function SettingsScreen() {
           defaultValue="templates"
           className="w-full flex-1 flex flex-col overflow-hidden"
           onValueChange={(value) => {
-            if (value === 'printing') loadPrinters();
+            if (value === 'printing') {
+              loadPrinters();
+              void loadPrintJobs();
+            }
           }}
         >
           <TabsList className="grid w-full grid-cols-3 mb-8">
@@ -830,12 +863,13 @@ export default function SettingsScreen() {
                     <Label className="text-sm">Papel</Label>
                     <Select
                       value={(formData as any).paper_size || '4x6'}
-                      onValueChange={(value: '4x6' | '5x7') => setFormData({ ...formData, paper_size: value })}
+                      onValueChange={(value: '2x6' | '4x6' | '5x7') => setFormData({ ...formData, paper_size: value })}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="2x6">2x6 pulgadas (solo tiras)</SelectItem>
                         <SelectItem value="4x6">4x6 pulgadas</SelectItem>
                         <SelectItem value="5x7">5x7 pulgadas</SelectItem>
                       </SelectContent>
@@ -904,6 +938,57 @@ export default function SettingsScreen() {
                 {isTesting ? 'Enviando test...' : '🖨️ Test de Impresión'}
               </Button>
             )}
+
+            <Card className="mt-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Cola de impresión</CardTitle>
+                  <CardDescription>Trabajos recientes y fallidos</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadPrintJobs}
+                  disabled={isLoadingJobs}
+                >
+                  {isLoadingJobs ? 'Actualizando...' : 'Actualizar'}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoadingJobs ? (
+                  <div className="text-center py-6 text-gray-400">Cargando trabajos...</div>
+                ) : printJobs.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400">Sin trabajos registrados</div>
+                ) : (
+                  <div className="space-y-3">
+                    {printJobs.slice(0, 10).map((job) => (
+                      <div
+                        key={job.job_id}
+                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm text-white font-semibold">{job.status.toUpperCase()}</p>
+                          <p className="text-xs text-white/70 break-all">{job.file_path}</p>
+                          {job.error && (
+                            <p className="text-xs text-red-400">Error: {job.error}</p>
+                          )}
+                        </div>
+                        {job.status !== 'sent' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={Boolean(retryingJobId)}
+                            onClick={() => handleRetryJob(job.job_id)}
+                          >
+                            {retryingJobId === job.job_id ? 'Reintentando...' : 'Reintentar'}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Info Box */}
             <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-6">
