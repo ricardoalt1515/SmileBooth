@@ -2,10 +2,17 @@
 Configuración de la aplicación - Optimizada para bajo consumo
 """
 from pathlib import Path
+import os
 
 # Rutas base
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = BASE_DIR / "data"
+
+_env_data_dir = os.getenv("PHOTOBOOTH_DATA_DIR")
+if _env_data_dir:
+    DATA_DIR = Path(_env_data_dir)
+else:
+    DATA_DIR = BASE_DIR / "data"
+# Permitir definir la carpeta de datos vía env para instalaciones empaquetadas
 PHOTOS_DIR = DATA_DIR / "photos"
 STRIPS_DIR = DATA_DIR / "strips"
 DESIGNS_DIR = DATA_DIR / "designs"

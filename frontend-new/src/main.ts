@@ -1,5 +1,7 @@
 import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron';
 import path from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 
 const DEFAULT_WINDOW_WIDTH = 1920;
@@ -14,8 +16,44 @@ if (started) {
 const isDevelopment = process.env.NODE_ENV === 'development' || MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const kioskEnv = process.env.KIOSK_MODE;
 const isKioskMode = kioskEnv ? kioskEnv === 'true' : !isDevelopment;
+const BACKEND_PORT = 8000;
 
 let mainWindow: BrowserWindow | null = null;
+let backendProcess: ChildProcess | null = null;
+
+function getDataDir() {
+  const appDataDir = app.getPath('appData');
+  const dir = path.join(appDataDir, 'Photobooth', 'data');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+async function waitForBackend() {
+  const url = `http://127.0.0.1:${BACKEND_PORT}/health`;
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return;
+    } catch (err) {
+      // Ignore and retry
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error('Backend health check failed');
+}
+
+function stopBackendProcess() {
+  try {
+    if (backendProcess) {
+      backendProcess.kill();
+      backendProcess = null;
+    }
+  } catch (error) {
+    console.error('Error stopping backend process', error);
+  }
+}
 
 // Single instance lock - prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
@@ -33,6 +71,34 @@ if (!gotTheLock) {
     }
   });
 }
+
+const startBackend = async (): Promise<void> => {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  const backendExecutableName = 'photobooth-backend.exe';
+  const backendPath = path.join(process.resourcesPath, backendExecutableName);
+
+  const dataDir = getDataDir();
+
+  const env = {
+    ...process.env,
+    PHOTOBOOTH_DATA_DIR: dataDir,
+  };
+
+  backendProcess = spawn(backendPath, [], {
+    env,
+    cwd: path.dirname(backendPath),
+    stdio: 'ignore',
+  });
+
+  backendProcess.on('error', (error) => {
+    console.error('Error al iniciar backend embebido:', error);
+  });
+
+  await waitForBackend();
+};
 
 const createWindow = () => {
   // Create the browser window with optimized settings
@@ -128,7 +194,15 @@ ipcMain.handle('exit-kiosk', () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!isDevelopment) {
+    try {
+      await startBackend();
+    } catch (error) {
+      console.error('No se pudo iniciar el backend embebido:', error);
+    }
+  }
+
   createWindow();
 
   app.on('activate', () => {
@@ -148,6 +222,7 @@ app.on('window-all-closed', () => {
   globalShortcut.unregisterAll();
 
   if (process.platform !== 'darwin') {
+    stopBackendProcess();
     app.quit();
   }
 });
@@ -155,6 +230,11 @@ app.on('window-all-closed', () => {
 // Unregister shortcuts when app is quitting
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+
+  if (backendProcess) {
+    backendProcess.kill();
+    backendProcess = null;
+  }
 });
 
 // In this file you can include the rest of your app's specific main process

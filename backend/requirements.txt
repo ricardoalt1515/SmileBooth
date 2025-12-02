@@ -15,7 +15,9 @@ qrcode
 sqlalchemy
 
 # macOS printing
-pycups
+pycups; sys_platform == 'darwin'
+# Windows printing
+pywin32; sys_platform == 'win32'
 
 # Utils
 python-dotenv

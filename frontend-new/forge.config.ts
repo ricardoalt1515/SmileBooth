@@ -21,6 +21,9 @@ const config: ForgeConfig = {
       NSDocumentsFolderUsageDescription: 'Esta aplicación necesita acceso a la carpeta de documentos para guardar las fotos.',
       NSDownloadsFolderUsageDescription: 'Esta aplicación necesita acceso a la carpeta de descargas para guardar las fotos.',
     },
+    // In production we include the packaged backend exe as an extra resource.
+    // The build pipeline must place backend/dist/photobooth-backend.exe before running `npm run make`.
+    extraResource: ['../backend/dist/photobooth-backend.exe'],
   },
   rebuildConfig: {},
   makers: [

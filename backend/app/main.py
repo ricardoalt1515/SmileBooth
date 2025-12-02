@@ -7,6 +7,7 @@ PhotoBooth API - Optimizada para Bajos Recursos
 import gc
 from contextlib import asynccontextmanager
 from pathlib import Path
+from app.config import API_CONFIG, DATA_DIR
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +24,6 @@ from app.api import (
     sessions,
     config_api,
 )
-from app.config import API_CONFIG
 
 
 @asynccontextmanager
@@ -96,7 +96,7 @@ app.include_router(config_api.router)
 
 # Servir archivos estáticos (fotos capturadas)
 # Las fotos se guardan en /photobooth/data/ (raíz del proyecto, no en backend/data/)
-data_dir = Path(__file__).parent.parent.parent / "data"
+data_dir = DATA_DIR
 data_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/data", StaticFiles(directory=str(data_dir)), name="data")
 
