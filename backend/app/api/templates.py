@@ -200,6 +200,7 @@ async def create_template(template_data: TemplateCreate):
             design_scale=template_data.design_scale,
             design_offset_x=template_data.design_offset_x,
             design_offset_y=template_data.design_offset_y,
+            photo_aspect_ratio=template_data.photo_aspect_ratio,
             is_active=False,
             created_at=datetime.now().isoformat(),
         )

@@ -13,6 +13,7 @@
     "background_color": "#dd2727",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-11-15T15:00:47.665750",
     "preview_url": null
@@ -31,6 +32,7 @@
     "background_color": "#c50d81",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-11-15T15:03:27.331599",
     "preview_url": null
@@ -49,6 +51,7 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-12-01T08:20:24.638544",
     "preview_url": null
@@ -67,6 +70,7 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-12-01T16:01:43.231348",
     "preview_url": null
@@ -85,6 +89,7 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 44,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-12-01T21:15:48.655513",
     "preview_url": null
@@ -103,6 +108,7 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-12-01T22:12:09.792706",
     "preview_url": null
@@ -121,6 +127,7 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
     "is_active": false,
     "created_at": "2025-12-01T23:28:48.524610",
     "preview_url": null
@@ -139,8 +146,47 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
-    "is_active": true,
+    "photo_aspect_ratio": "auto",
+    "is_active": false,
     "created_at": "2025-12-02T07:40:20.722740",
+    "preview_url": null
+  },
+  "template_20251202_093714": {
+    "id": "template_20251202_093714",
+    "name": "pruba",
+    "layout": "3x1-vertical",
+    "design_file_path": "/data/designs/template_assets/template_20251202_093714_design.png",
+    "design_position": "bottom",
+    "overlay_mode": "footer",
+    "design_scale": 0.87,
+    "design_offset_x": 0.5,
+    "design_offset_y": 0.8,
+    "design_stretch": false,
+    "background_color": "#FFFFFF",
+    "photo_spacing": 20,
+    "photo_filter": "none",
+    "photo_aspect_ratio": "auto",
+    "is_active": true,
+    "created_at": "2025-12-02T09:37:14.733384",
+    "preview_url": null
+  },
+  "template_20251202_103435": {
+    "id": "template_20251202_103435",
+    "name": "autosave",
+    "layout": "3x1-vertical",
+    "design_file_path": "/data/designs/template_assets/template_20251202_103435_design.jpg",
+    "design_position": "bottom",
+    "overlay_mode": "footer",
+    "design_scale": 0.8,
+    "design_offset_x": 0.5,
+    "design_offset_y": 0.8,
+    "design_stretch": false,
+    "background_color": "#FFFFFF",
+    "photo_spacing": 20,
+    "photo_filter": "none",
+    "photo_aspect_ratio": "1:1",
+    "is_active": false,
+    "created_at": "2025-12-02T10:34:35.626938",
     "preview_url": null
   }
 }

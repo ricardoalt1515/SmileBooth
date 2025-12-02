@@ -36,6 +36,8 @@ export type OverlayModeType =
   | typeof OVERLAY_MODE_FREE
   | typeof OVERLAY_MODE_FOOTER;
 
+export type PhotoAspectRatioType = 'auto' | '1:1' | '3:4';
+
 /**
  * Template model - matches backend exactly
  */
@@ -55,6 +57,7 @@ export interface Template {
   background_color: string;
   photo_spacing: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
+  photo_aspect_ratio?: PhotoAspectRatioType;
   is_active: boolean;
   created_at: string;
   preview_url: string | null;
@@ -75,6 +78,7 @@ export interface TemplateCreate {
   design_offset_x?: number | null;
   design_offset_y?: number | null;
   design_stretch?: boolean;
+  photo_aspect_ratio?: PhotoAspectRatioType;
 }
 
 /**
@@ -93,6 +97,7 @@ export interface TemplateUpdate {
   design_offset_x?: number | null;
   design_offset_y?: number | null;
   design_stretch?: boolean;
+   photo_aspect_ratio?: PhotoAspectRatioType;
 }
 
 export interface FormData {
@@ -108,6 +113,7 @@ export interface FormData {
   design_offset_x: number;
   design_offset_y: number;
   design_stretch: boolean;
+  photo_aspect_ratio: PhotoAspectRatioType;
 }
 
 /**

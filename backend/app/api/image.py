@@ -68,6 +68,7 @@ def _compose_strip_core(request: ComposeStripRequest) -> ComposeStripResponse:
             design_offset_x=request.design_offset_x,
             design_offset_y=request.design_offset_y,
             design_stretch=bool(request.design_stretch) if request.design_stretch is not None else False,
+            photo_aspect_ratio=request.photo_aspect_ratio,
         )
     except Exception as compose_err:
         traceback.print_exc()
@@ -147,6 +148,7 @@ async def preview_strip(
     design_offset_y: float | None = Form(None),
     overlay_mode: str | None = Form(None),
     design_stretch: bool | None = Form(None),
+    photo_aspect_ratio: str | None = Form(None),
 ):
     """
     Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
@@ -186,6 +188,8 @@ async def preview_strip(
                 payload["design_stretch"] = design_stretch.lower() in {"1", "true", "yes", "on"}
             else:
                 payload["design_stretch"] = bool(design_stretch)
+        if photo_aspect_ratio is not None:
+            payload["photo_aspect_ratio"] = photo_aspect_ratio
 
         # Asegurar que vengan photo_paths válidas
         if not payload.get("photo_paths"):
@@ -248,6 +252,7 @@ async def preview_strip(
             design_offset_x=request_obj.design_offset_x,
             design_offset_y=request_obj.design_offset_y,
             design_stretch=bool(request_obj.design_stretch) if request_obj.design_stretch is not None else False,
+            photo_aspect_ratio=request_obj.photo_aspect_ratio,
         )
         
         # Mover a temp

@@ -20,6 +20,7 @@ import {
   LayoutType,
   DesignPositionType,
   OverlayModeType,
+  PhotoAspectRatioType,
   LAYOUT_LABELS,
   DESIGN_POSITION_LABELS,
   LAYOUT_3X1_VERTICAL,
@@ -98,6 +99,7 @@ interface FormData {
   design_offset_x: number; // 0-1, centro horizontal
   design_offset_y: number; // 0-1, centro vertical
   design_stretch: boolean;
+  photo_aspect_ratio: PhotoAspectRatioType;
 }
 
 function applySmartOverlayDefaults(
@@ -192,6 +194,7 @@ export default function TemplateDialog({
       design_offset_x: DEFAULT_OFFSET_X,
       design_offset_y: DEFAULT_OFFSET_Y_BOTTOM,
       design_stretch: false,
+      photo_aspect_ratio: 'auto',
     };
   }
 
@@ -215,6 +218,7 @@ export default function TemplateDialog({
             ? DEFAULT_OFFSET_Y_TOP
             : DEFAULT_OFFSET_Y_BOTTOM),
         design_stretch: editingTemplate.design_stretch ?? false,
+        photo_aspect_ratio: (editingTemplate as any).photo_aspect_ratio ?? 'auto',
       });
 
       // Set preview if has design
@@ -266,14 +270,28 @@ export default function TemplateDialog({
     };
   }, [designPreviewUrl]);
 
+  const {
+    layout,
+    design_position,
+    overlay_mode,
+    background_color,
+    photo_spacing,
+    photo_filter,
+    design_scale,
+    design_offset_x,
+    design_offset_y,
+    design_stretch,
+    photo_aspect_ratio,
+  } = formData;
+
   // Render real preview using demo photos (reusing them if layout necesita más)
   useEffect(() => {
-    if (!ENABLE_LIVE_PREVIEW) {
+    if (!open || !ENABLE_LIVE_PREVIEW) {
       setStripPreviewUrl(null);
       return;
     }
 
-    const needs = getLayoutPhotoCount(formData.layout);
+    const needs = getLayoutPhotoCount(layout);
 
     // Sin fotos demo no podemos generar preview real
     if (!demoPhotos.length) {
@@ -300,16 +318,17 @@ export default function TemplateDialog({
         const previewImage = await photoboothAPI.image.previewStrip({
           photo_paths: effectivePhotos,
           design_path: designPreviewPath ?? editingTemplate?.design_file_path ?? null,
-          layout: formData.layout,
-          design_position: formData.design_position,
-          background_color: formData.background_color,
-          photo_spacing: formData.photo_spacing,
-          photo_filter: formData.photo_filter,
-          design_scale: formData.design_scale,
-          design_offset_x: formData.design_offset_x,
-          design_offset_y: formData.design_offset_y,
-          overlay_mode: formData.overlay_mode,
-          design_stretch: formData.design_stretch,
+          layout,
+          design_position,
+          background_color,
+          photo_spacing,
+          photo_filter,
+          design_scale,
+          design_offset_x,
+          design_offset_y,
+          overlay_mode,
+          design_stretch,
+          photo_aspect_ratio,
         });
         setStripPreviewUrl(previewImage);
       } catch (error) {
@@ -321,7 +340,23 @@ export default function TemplateDialog({
     }, 800); // Increased debounce to reduce flickering
 
     return () => clearTimeout(timer);
-  }, [formData, demoPhotos, editingTemplate, designPreviewPath]);
+  }, [
+    open,
+    layout,
+    design_position,
+    overlay_mode,
+    background_color,
+    photo_spacing,
+    photo_filter,
+    design_scale,
+    design_offset_x,
+    design_offset_y,
+    design_stretch,
+    photo_aspect_ratio,
+    demoPhotos,
+    editingTemplate,
+    designPreviewPath,
+  ]);
 
   const updateOverlayPositionFromPoint = useCallback((clientX: number, clientY: number) => {
     const container = previewStripRef.current;
@@ -601,6 +636,7 @@ export default function TemplateDialog({
           design_offset_x: formData.design_offset_x,
           design_offset_y: formData.design_offset_y,
           design_stretch: formData.design_stretch,
+          photo_aspect_ratio: formData.photo_aspect_ratio,
         });
         templateId = editingTemplate.id;
         toast.success('Template actualizado');
@@ -618,6 +654,7 @@ export default function TemplateDialog({
           design_offset_x: formData.design_offset_x,
           design_offset_y: formData.design_offset_y,
           design_stretch: formData.design_stretch,
+          photo_aspect_ratio: formData.photo_aspect_ratio,
         };
 
         const newTemplate = await photoboothAPI.templates.create(templateData);
@@ -807,7 +844,6 @@ export default function TemplateDialog({
                   </Badge>
                 </div>
 
-                {/* Print Format Selector (High Level) */}
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">Formato de Impresión</Label>
                   <div className="grid grid-cols-1 gap-3">
@@ -850,6 +886,25 @@ export default function TemplateDialog({
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Forma de la foto</Label>
+                  <Select
+                    value={formData.photo_aspect_ratio}
+                    onValueChange={(value: PhotoAspectRatioType) =>
+                      setFormData({ ...formData, photo_aspect_ratio: value })
+                    }
+                  >
+                    <SelectTrigger className="w-full h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Automática (según diseño)</SelectItem>
+                      <SelectItem value="1:1">Cuadrada 1x1</SelectItem>
+                      <SelectItem value="3:4">Vertical 3x4</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Advanced Options Toggle */}

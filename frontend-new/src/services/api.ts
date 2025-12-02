@@ -196,6 +196,7 @@ export const photoboothAPI = {
       design_offset_y?: number | null;
       overlay_mode?: 'free' | 'footer' | null;
       design_stretch?: boolean;
+      photo_aspect_ratio?: 'auto' | '1:1' | '3:4' | null;
     }) => {
       // Use imageProcessingClient for longer timeout
       const response = await imageProcessingClient.post('/api/image/compose-strip', {
@@ -213,6 +214,7 @@ export const photoboothAPI = {
         design_offset_y: params.design_offset_y,
         overlay_mode: params.overlay_mode,
         design_stretch: params.design_stretch,
+        photo_aspect_ratio: params.photo_aspect_ratio,
       });
       return response.data; // { success, strip_path, full_page_path }
     },
@@ -231,6 +233,7 @@ export const photoboothAPI = {
       design_offset_y?: number | null;
       overlay_mode?: 'free' | 'footer' | null;
       design_stretch?: boolean;
+      photo_aspect_ratio?: 'auto' | '1:1' | '3:4' | null;
     }) => {
       const response = await apiClient.post('/api/image/jobs/compose', {
         photo_paths: params.photo_paths,
@@ -289,6 +292,7 @@ export const photoboothAPI = {
       design_offset_y?: number | null;
       overlay_mode?: 'free' | 'footer' | null;
       design_stretch?: boolean;
+      photo_aspect_ratio?: 'auto' | '1:1' | '3:4' | null;
     }) => {
       // Siempre usamos multipart/form-data para alinearnos con la firma de FastAPI,
       // que combina Body opcional + campos Form/File.
@@ -336,6 +340,9 @@ export const photoboothAPI = {
       }
       if (params.design_stretch) {
         form.append('design_stretch', 'true');
+      }
+      if (params.photo_aspect_ratio) {
+        form.append('photo_aspect_ratio', params.photo_aspect_ratio);
       }
 
       const response = await imageProcessingClient.post('/api/image/preview-strip', form, {
@@ -652,6 +659,7 @@ export const photoboothAPI = {
       design_offset_x?: number | null;
       design_offset_y?: number | null;
       design_stretch?: boolean;
+      photo_aspect_ratio?: 'auto' | '1:1' | '3:4';
     }) => {
       const response = await apiClient.post('/api/templates/create', templateData);
       return response.data; // Template object
@@ -680,6 +688,7 @@ export const photoboothAPI = {
       design_offset_x?: number | null;
       design_offset_y?: number | null;
       design_stretch?: boolean;
+      photo_aspect_ratio?: 'auto' | '1:1' | '3:4';
     }) => {
       const response = await apiClient.put(`/api/templates/${templateId}`, updates);
       return response.data; // Template object

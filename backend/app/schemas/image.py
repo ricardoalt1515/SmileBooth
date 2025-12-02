@@ -21,6 +21,7 @@ class ComposeStripRequest(BaseModel):
     photo_spacing: int | None = None  # Espaciado entre fotos en px
     photo_filter: str | None = None  # Filtro de fotos: none, bw, sepia, glam
     print_mode: str | None = None  # single | dual-strip
+    photo_aspect_ratio: str | None = None  # "auto", "1:1", "3:4" (delegado al template)
     design_scale: float | None = None
     design_offset_x: float | None = None
     design_offset_y: float | None = None

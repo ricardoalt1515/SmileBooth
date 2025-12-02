@@ -30,6 +30,7 @@ OVERLAY_MODE_FOOTER = "footer"
 LayoutType = Literal["3x1-vertical", "4x1-vertical", "6x1-vertical", "2x2-grid"]
 DesignPositionType = Literal["top", "bottom", "left", "right"]
 OverlayModeType = Literal["free", "footer"]
+PhotoAspectRatioType = Literal["auto", "1:1", "3:4"]
 
 
 class Template(BaseModel):
@@ -95,7 +96,10 @@ class Template(BaseModel):
         default="none",
         description="Photo filter: none, bw, sepia, glam"
     )
-    
+    photo_aspect_ratio: PhotoAspectRatioType = Field(
+        default="auto",
+        description="Visible aspect ratio for photos in the strip: auto (layout), 1:1 square, or 3:4 vertical."
+    )
     # Metadata
     is_active: bool = Field(
         default=False,
@@ -126,6 +130,7 @@ class TemplateCreate(BaseModel):
     design_offset_x: float | None = None
     design_offset_y: float | None = None
     design_stretch: bool = False
+    photo_aspect_ratio: PhotoAspectRatioType = "auto"
 
 
 class TemplateUpdate(BaseModel):
@@ -142,6 +147,7 @@ class TemplateUpdate(BaseModel):
     design_offset_x: float | None = None
     design_offset_y: float | None = None
     design_stretch: bool | None = None
+    photo_aspect_ratio: PhotoAspectRatioType | None = None
 
 
 def get_layout_photo_count(layout: LayoutType) -> int:

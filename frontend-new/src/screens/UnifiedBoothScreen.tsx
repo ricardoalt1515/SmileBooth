@@ -529,6 +529,7 @@ export default function UnifiedBoothScreen() {
         design_offset_y: activeTemplate?.design_offset_y ?? null,
         overlay_mode: activeTemplate?.overlay_mode ?? 'free',
         design_stretch: activeTemplate?.design_stretch ?? false,
+        photo_aspect_ratio: (activeTemplate as any)?.photo_aspect_ratio ?? 'auto',
       });
 
       console.log('✅ Preview generado:', previewUrl);

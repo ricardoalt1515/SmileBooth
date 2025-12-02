@@ -127,7 +127,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
       const previewEntries: Record<string, string> = {};
       const needs = (layout: string) => getLayoutPhotoCount(layout as any);
 
-      for (const tpl of templates) {
+      const previewPromises = templates.map(async (tpl) => {
         try {
           const required = needs(tpl.layout);
           const effectivePhotos = Array.from({ length: required }, (_, idx) =>
@@ -147,12 +147,22 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
             design_offset_y: tpl.design_offset_y ?? null,
             overlay_mode: tpl.overlay_mode ?? OVERLAY_MODE_FREE,
             design_stretch: tpl.design_stretch ?? false,
+            photo_aspect_ratio: (tpl as any).photo_aspect_ratio ?? 'auto',
           });
-          previewEntries[tpl.id] = url;
+          return { id: tpl.id, url };
         } catch (error) {
           console.warn('No se pudo generar preview para template', tpl.id, error);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(previewPromises);
+      for (const result of results) {
+        if (result && result.url) {
+          previewEntries[result.id] = result.url;
         }
       }
+
       setPreviewMap(previewEntries);
       setIsGeneratingPreview(false);
     };

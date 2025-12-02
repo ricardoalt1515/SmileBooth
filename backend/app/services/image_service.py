@@ -91,6 +91,7 @@ class ImageService:
         design_offset_x: Optional[float] = None,
         design_offset_y: Optional[float] = None,
         design_stretch: bool = False,
+        photo_aspect_ratio: Optional[str] = None,
     ) -> Path:
         """
         Compone una tira de fotos + diseño personalizado.
@@ -135,6 +136,14 @@ class ImageService:
         
         # Normalizar filtro de fotos
         photo_filter_normalized = (photo_filter or "none").strip().lower()
+
+        # Normalizar aspecto de foto solicitado (delegado al template)
+        aspect_clean = (photo_aspect_ratio or "auto").strip().lower()
+        aspect_ratio_value: Optional[float] = None
+        if aspect_clean in {"1:1", "1x1", "square"}:
+            aspect_ratio_value = 1.0
+        elif aspect_clean in {"3:4", "3x4"}:
+            aspect_ratio_value = 3.0 / 4.0
 
         # Determinar layout soportado (solo verticales por ahora)
         layout_clean = (layout or '').strip().lower()
@@ -233,6 +242,23 @@ class ImageService:
                 )
             
             # 1. Procesar y agregar las fotos UNA POR UNA
+            # Calcular dimensiones objetivo efectivas para cada foto dentro del strip
+            photo_box_width = strip_width - (HORIZONTAL_PHOTO_MARGIN * 2)
+            crop_width = photo_box_width
+            crop_height = target_photo_height
+
+            if aspect_ratio_value is not None and target_photo_height > 0:
+                # Partimos de la altura vertical disponible y ajustamos ancho segn el aspecto
+                eff_height = target_photo_height
+                eff_width = int(eff_height * aspect_ratio_value)
+
+                # Si el ancho excede el espacio lateral disponible, re-ajustar desde el ancho
+                if eff_width > photo_box_width and aspect_ratio_value > 0:
+                    eff_width = photo_box_width
+                    eff_height = int(eff_width / aspect_ratio_value)
+
+                crop_width = max(1, eff_width)
+                crop_height = max(1, eff_height)
             for i, photo_path in enumerate(photo_paths):
                 photo = Image.open(photo_path)
                 filtered: Optional[Image.Image] = None
@@ -244,8 +270,8 @@ class ImageService:
 
                   photo_processed = ImageService._process_photo(
                       source,
-                      strip_width - (HORIZONTAL_PHOTO_MARGIN * 2),  # Ancho útil para fotos con margen lateral
-                      target_photo_height,
+                      crop_width,
+                      crop_height,
                   )
 
                   # Calcular posición centrada
@@ -268,9 +294,6 @@ class ImageService:
                   # Liberar foto original
                   photo.close()
                   del photo
-
-                  # Forzar limpieza de memoria
-                  gc.collect()
             
             # 2. Agregar diseño abajo si aplica (modo banda fija legacy)
             if design_exists and use_legacy_band and design_position_normalized == DESIGN_POSITION_BOTTOM:
@@ -333,7 +356,7 @@ class ImageService:
             )
 
             # Registrar strip en metadata de sesión (solo para sesiones reales)
-            if session_id:
+            if session_id and session_id != "preview":
                 strip_url = get_photo_url(output_path)
                 SessionService.set_strip(session_id, strip_url)
 
