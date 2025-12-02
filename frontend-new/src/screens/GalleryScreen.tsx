@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera, Folder, Printer } from 'lucide-react';
+import { X, Download, Trash2, Image as ImageIcon, Calendar, Camera, Folder, Printer, LayoutTemplate } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useToastContext } from '../contexts/ToastContext';
 import photoboothAPI, { API_BASE_URL } from '../services/api';
@@ -56,6 +56,7 @@ export default function GalleryScreen() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [activePresetName, setActivePresetName] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'photos' | 'strips'>('photos');
 
   // Cargar fotos al montar
   useEffect(() => {
@@ -163,6 +164,24 @@ export default function GalleryScreen() {
     } catch (error) {
       console.error('Error exportando sesión:', error);
       toast.error('No se pudo exportar la sesión');
+    }
+  };
+
+  const handleExportStripsZip = async () => {
+    if (sessions.filter(s => s.strip_url).length === 0) {
+      toast.warning('No hay tiras para exportar');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await photoboothAPI.gallery.exportStripsZip();
+      toast.success('ZIP de tiras descargado');
+    } catch (error) {
+      console.error('Error exporting strips ZIP:', error);
+      toast.error('Error al exportar tiras');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -351,95 +370,124 @@ export default function GalleryScreen() {
         )}
 
         {/* Actions */}
-        <div className="flex gap-4 mb-8 items-center">
-
-          {/* Fin de evento: flujo guiado para staff */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                disabled={isExporting || photos.length === 0}
-                className="flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#ff0080] to-[#ff8c00] text-white font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        <div className="flex flex-col gap-6 mb-8">
+          {/* View Toggle */}
+          <div className="flex justify-center">
+            <div className="bg-white/10 p-1 rounded-xl flex gap-1">
+              <button
+                onClick={() => setViewMode('photos')}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${viewMode === 'photos'
+                    ? 'bg-[#ff0080] text-white shadow-lg'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
               >
-                <Download className="w-5 h-5" />
-                {isExporting ? 'Exportando...' : 'Cerrar evento y exportar ZIP'}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="bg-black/95 border-gray-700 text-white max-w-lg">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Cerrar evento y exportar fotos</AlertDialogTitle>
-                <AlertDialogDescription className="text-gray-300">
-                  Este paso genera un archivo ZIP con todas las fotos del evento y lo descarga en esta computadora.
-                  {' '}No borra ninguna foto de la galería. Úsalo al terminar el evento para guardar una copia para el cliente.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-white/10">
-                  Cancelar
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleExportZip}
-                  className="bg-[#ff0080] hover:bg-[#ff0080]/80 text-white"
-                >
-                  {isExporting ? 'Exportando...' : 'Sí, exportar ZIP del evento'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {/* Export rápido sin confirmación */}
-          <button
-            onClick={handleExportZip}
-            disabled={isExporting || photos.length === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-[#ff0080] hover:bg-[#ff0080]/80 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-5 h-5" />
-            {isExporting ? 'Exportando...' : 'Exportar ZIP rápido'}
-          </button>
-
-          <button
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-all"
-          >
-            🔄 Actualizar
-          </button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                disabled={photos.length === 0}
-                className="ml-auto"
+                <ImageIcon className="w-5 h-5" />
+                Fotos
+              </button>
+              <button
+                onClick={() => setViewMode('strips')}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${viewMode === 'strips'
+                    ? 'bg-[#ff0080] text-white shadow-lg'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
               >
-                <Trash2 className="w-5 h-5 mr-2" />
-                Limpiar Todo
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="bg-black/95 border-gray-700 text-white">
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Eliminar todas las fotos?</AlertDialogTitle>
-                <AlertDialogDescription className="text-gray-400">
-                  Esta acción eliminará permanentemente {stats?.total_photos} fotos de {stats?.total_sessions} sesiones.
-                  Esta acción no se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-white/10">
-                  Cancelar
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleClearAll}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Sí, Eliminar Todo
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                <LayoutTemplate className="w-5 h-5" />
+                Tiras
+              </button>
+            </div>
+          </div>
 
+          <div className="flex gap-4 items-center justify-between">
+            <div className="flex gap-4">
+              {/* Fin de evento: flujo guiado para staff */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    disabled={isExporting || photos.length === 0}
+                    className="flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#ff0080] to-[#ff8c00] text-white font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download className="w-5 h-5" />
+                    {isExporting ? 'Exportando...' : 'Cerrar evento y exportar ZIP'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="bg-black/95 border-gray-700 text-white max-w-lg">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cerrar evento y exportar fotos</AlertDialogTitle>
+                    <AlertDialogDescription className="text-gray-300">
+                      Este paso genera un archivo ZIP con todas las fotos del evento y lo descarga en esta computadora.
+                      {' '}No borra ninguna foto de la galería. Úsalo al terminar el evento para guardar una copia para el cliente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-white/10">
+                      Cancelar
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleExportZip}
+                      className="bg-[#ff0080] hover:bg-[#ff0080]/80 text-white"
+                    >
+                      {isExporting ? 'Exportando...' : 'Sí, exportar ZIP del evento'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Exportar Tiras */}
+              <button
+                onClick={handleExportStripsZip}
+                disabled={isExporting || sessions.filter(s => s.strip_url).length === 0}
+                className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <LayoutTemplate className="w-5 h-5" />
+                {isExporting ? 'Exportando...' : 'Exportar Tiras ZIP'}
+              </button>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={handleRefresh}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-all"
+              >
+                🔄 Actualizar
+              </button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    disabled={photos.length === 0}
+                  >
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    Limpiar Todo
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="bg-black/95 border-gray-700 text-white">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar todas las fotos?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-gray-400">
+                      Esta acción eliminará permanentemente {stats?.total_photos} fotos de {stats?.total_sessions} sesiones.
+                      Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-white/10">
+                      Cancelar
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleClearAll}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Sí, Eliminar Todo
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
         </div>
 
-        {/* Photos grouped by session */}
+        {/* Photos grouped by session OR Strips Grid */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-16 h-16 border-4 border-[#ff0080] border-t-transparent rounded-full animate-spin mb-4" />
@@ -451,7 +499,68 @@ export default function GalleryScreen() {
             <p className="text-2xl text-gray-400 mb-2">No hay fotos aún</p>
             <p className="text-gray-500">Las fotos capturadas aparecerán aquí</p>
           </div>
+        ) : viewMode === 'strips' ? (
+          // VISTA DE TIRAS
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {sessions
+              .filter((s) => s.strip_url)
+              .map((session, index) => (
+                <div
+                  key={session.session_id}
+                  className="bg-white/5 rounded-xl overflow-hidden border border-white/10 group hover:border-[#ff0080]/50 transition-all duration-300 animate-fade-in-up"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <div className="relative aspect-[2/6] w-full bg-black/20">
+                    <img
+                      src={session.strip_url!}
+                      alt={`Tira ${session.session_id}`}
+                      className="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                      onClick={() => window.open(session.strip_url!, '_blank')}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                      <p className="text-white font-medium bg-black/50 px-3 py-1 rounded-full">
+                        Click para ver
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-white/10">
+                    <p className="text-sm font-medium text-white truncate mb-1">
+                      Sesión {session.session_id}
+                    </p>
+                    <p className="text-xs text-white/60 mb-3">
+                      {session.created_at ? formatTimestamp(session.created_at) : 'Fecha desconocida'}
+                    </p>
+                    <div className="flex gap-2">
+                      <a
+                        href={session.strip_url!}
+                        download={`strip_${session.session_id}.jpg`}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Download className="w-3 h-3" />
+                        Descargar
+                      </a>
+                      <button
+                        onClick={() => handleReprintSession(session.session_id)}
+                        disabled={isPrinting}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        <Printer className="w-3 h-3" />
+                        Imprimir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            {sessions.filter((s) => s.strip_url).length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500">
+                <LayoutTemplate className="w-16 h-16 mb-4 opacity-50" />
+                <p>No hay tiras generadas en este evento</p>
+              </div>
+            )}
+          </div>
         ) : (
+          // VISTA DE FOTOS (Original)
           <div className="space-y-6">
             {sessions.map((session) => (
               <div key={session.session_id} className="bg-white/5 rounded-2xl border border-white/10 p-4">
@@ -533,7 +642,7 @@ export default function GalleryScreen() {
                         <p className="text-xs font-medium truncate">
                           {formatTimestamp(photo.timestamp)}
                         </p>
-                        <p className="text-[10px] text-white/60 truncate">
+                        <p className="text-xs text-white/60 truncate">
                           {photo.filename}
                         </p>
                       </div>

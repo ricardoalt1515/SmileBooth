@@ -194,6 +194,8 @@ export const photoboothAPI = {
       design_scale?: number | null;
       design_offset_x?: number | null;
       design_offset_y?: number | null;
+      overlay_mode?: 'free' | 'footer' | null;
+      design_stretch?: boolean;
     }) => {
       // Use imageProcessingClient for longer timeout
       const response = await imageProcessingClient.post('/api/image/compose-strip', {
@@ -209,6 +211,8 @@ export const photoboothAPI = {
         design_scale: params.design_scale,
         design_offset_x: params.design_offset_x,
         design_offset_y: params.design_offset_y,
+        overlay_mode: params.overlay_mode,
+        design_stretch: params.design_stretch,
       });
       return response.data; // { success, strip_path, full_page_path }
     },
@@ -225,6 +229,8 @@ export const photoboothAPI = {
       design_scale?: number | null;
       design_offset_x?: number | null;
       design_offset_y?: number | null;
+      overlay_mode?: 'free' | 'footer' | null;
+      design_stretch?: boolean;
     }) => {
       const response = await apiClient.post('/api/image/jobs/compose', {
         photo_paths: params.photo_paths,
@@ -239,6 +245,8 @@ export const photoboothAPI = {
         design_scale: params.design_scale,
         design_offset_x: params.design_offset_x,
         design_offset_y: params.design_offset_y,
+        overlay_mode: params.overlay_mode,
+        design_stretch: params.design_stretch,
       });
       return response.data as {
         job_id: string;
@@ -279,6 +287,8 @@ export const photoboothAPI = {
       design_scale?: number | null;
       design_offset_x?: number | null;
       design_offset_y?: number | null;
+      overlay_mode?: 'free' | 'footer' | null;
+      design_stretch?: boolean;
     }) => {
       // Siempre usamos multipart/form-data para alinearnos con la firma de FastAPI,
       // que combina Body opcional + campos Form/File.
@@ -320,6 +330,12 @@ export const photoboothAPI = {
       }
       if (params.design_offset_y !== undefined && params.design_offset_y !== null) {
         form.append('design_offset_y', String(params.design_offset_y));
+      }
+      if (params.overlay_mode) {
+        form.append('overlay_mode', params.overlay_mode);
+      }
+      if (params.design_stretch) {
+        form.append('design_stretch', 'true');
       }
 
       const response = await imageProcessingClient.post('/api/image/preview-strip', form, {
@@ -473,6 +489,18 @@ export const photoboothAPI = {
       link.click();
       window.URL.revokeObjectURL(url);
     },
+    exportStripsZip: async () => {
+      const response = await apiClient.post('/api/gallery/export-strips-zip', {}, {
+        responseType: 'blob',
+      });
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `photobooth_strips_${Date.now()}.zip`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    },
     exportSessionZip: async (sessionId: string) => {
       const response = await apiClient.post(`/api/gallery/sessions/${encodeURIComponent(sessionId)}/zip`, {}, {
         responseType: 'blob',
@@ -616,12 +644,14 @@ export const photoboothAPI = {
       name: string;
       layout: string;
       design_position: string;
+      overlay_mode: 'free' | 'footer';
       background_color: string;
       photo_spacing: number;
       photo_filter?: string;
       design_scale?: number | null;
       design_offset_x?: number | null;
       design_offset_y?: number | null;
+      design_stretch?: boolean;
     }) => {
       const response = await apiClient.post('/api/templates/create', templateData);
       return response.data; // Template object
@@ -642,12 +672,14 @@ export const photoboothAPI = {
       name?: string;
       layout?: string;
       design_position?: string;
+      overlay_mode?: 'free' | 'footer';
       background_color?: string;
       photo_spacing?: number;
       photo_filter?: string;
       design_scale?: number | null;
       design_offset_x?: number | null;
       design_offset_y?: number | null;
+      design_stretch?: boolean;
     }) => {
       const response = await apiClient.put(`/api/templates/${templateId}`, updates);
       return response.data; // Template object

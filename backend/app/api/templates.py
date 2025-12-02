@@ -192,9 +192,13 @@ async def create_template(template_data: TemplateCreate):
             name=template_data.name,
             layout=template_data.layout,
             design_position=template_data.design_position,
+            overlay_mode=template_data.overlay_mode,
             background_color=template_data.background_color,
             photo_spacing=template_data.photo_spacing,
             photo_filter=template_data.photo_filter,
+            design_scale=template_data.design_scale,
+            design_offset_x=template_data.design_offset_x,
+            design_offset_y=template_data.design_offset_y,
             is_active=False,
             created_at=datetime.now().isoformat(),
         )

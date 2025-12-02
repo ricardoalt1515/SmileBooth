@@ -24,6 +24,8 @@ class ComposeStripRequest(BaseModel):
     design_scale: float | None = None
     design_offset_x: float | None = None
     design_offset_y: float | None = None
+    overlay_mode: str | None = None  # "free" | "footer"
+    design_stretch: bool | None = None
 
 
 class ComposeStripResponse(BaseModel):

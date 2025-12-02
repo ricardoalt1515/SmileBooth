@@ -383,3 +383,64 @@ async def clear_all_photos():
             status_code=500,
             detail=f"Error al limpiar fotos: {str(e)}"
         )
+
+
+@router.post("/export-strips-zip")
+async def export_strips_zip():
+    """
+    Exporta solo las tiras de fotos (strips) de todas las sesiones en un archivo ZIP.
+    """
+    try:
+        # Crear nombre del ZIP con timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_filename = f"photobooth_strips_{timestamp}.zip"
+        zip_path = TEMP_DIR / zip_filename
+        
+        # Crear ZIP
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            if PHOTOS_DIR.exists():
+                count = 0
+                # Recorrer todas las sesiones
+                for session_dir in PHOTOS_DIR.iterdir():
+                    if session_dir.is_dir():
+                        session_id = session_dir.name
+                        
+                        # Buscar strip.jpg
+                        strip_path = session_dir / "strip.jpg"
+                        
+                        if strip_path.exists():
+                            # Nombre único para el archivo en el ZIP
+                            arcname = f"strip_{session_id}.jpg"
+                            zipf.write(strip_path, arcname)
+                            count += 1
+        
+        # Verificar que se creó el ZIP
+        if not zip_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail="Error al crear archivo ZIP"
+            )
+            
+        if count == 0:
+             raise HTTPException(
+                status_code=404,
+                detail="No se encontraron tiras para exportar"
+            )
+        
+        # Retornar el archivo
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename=zip_filename,
+            headers={
+                "Content-Disposition": f"attachment; filename={zip_filename}"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al exportar ZIP de tiras: {str(e)}"
+        )

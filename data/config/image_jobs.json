@@ -1,4 +1,138 @@
 {
+  "c8fbb026-38db-42b3-9f64-b7f5b6d9f3e6": {
+    "job_id": "c8fbb026-38db-42b3-9f64-b7f5b6d9f3e6",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251201_221232/shot-1.jpg",
+        "/data/photos/20251201_221232/shot-2.jpg",
+        "/data/photos/20251201_221232/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251201_221209_design.jpg",
+      "session_id": "20251201_221232",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 20,
+      "photo_filter": "none",
+      "print_mode": "dual-strip",
+      "design_scale": 0.9,
+      "design_offset_x": 0.5,
+      "design_offset_y": 0.8,
+      "overlay_mode": "footer",
+      "design_stretch": null
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251201_221232/strip.jpg",
+      "full_page_path": "/data/photos/20251201_221232/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-01T22:13:05.296730",
+    "updated_at": "2025-12-01T22:13:06.495457"
+  },
+  "29e5151f-9f1f-4028-9b06-243977b7707a": {
+    "job_id": "29e5151f-9f1f-4028-9b06-243977b7707a",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251201_211605/shot-1.jpg",
+        "/data/photos/20251201_211605/shot-2.jpg",
+        "/data/photos/20251201_211605/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251201_211548_design.jpg",
+      "session_id": "20251201_211605",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 44,
+      "photo_filter": "none",
+      "print_mode": "dual-strip",
+      "design_scale": 1.0,
+      "design_offset_x": 0.5,
+      "design_offset_y": 0.8,
+      "overlay_mode": "footer",
+      "design_stretch": null
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251201_211605/strip.jpg",
+      "full_page_path": "/data/photos/20251201_211605/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-01T21:16:38.180319",
+    "updated_at": "2025-12-01T21:16:38.580485"
+  },
+  "cd389091-8df7-4ef6-99bf-f1071ff36ca3": {
+    "job_id": "cd389091-8df7-4ef6-99bf-f1071ff36ca3",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251201_205234/shot-1.jpg",
+        "/data/photos/20251201_205234/shot-2.jpg",
+        "/data/photos/20251201_205234/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251201_082024_design.png",
+      "session_id": "20251201_205234",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 20,
+      "photo_filter": "none",
+      "print_mode": "dual-strip",
+      "design_scale": null,
+      "design_offset_x": null,
+      "design_offset_y": null,
+      "overlay_mode": "free"
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251201_205234/strip.jpg",
+      "full_page_path": "/data/photos/20251201_205234/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-01T20:53:07.892069",
+    "updated_at": "2025-12-01T20:53:08.980056"
+  },
+  "ef1b2a1d-93a6-4d94-b867-9e313f291323": {
+    "job_id": "ef1b2a1d-93a6-4d94-b867-9e313f291323",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251201_160217/shot-1.jpg",
+        "/data/photos/20251201_160217/shot-2.jpg",
+        "/data/photos/20251201_160217/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251201_160143_design.png",
+      "session_id": "20251201_160217",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 20,
+      "photo_filter": "none",
+      "print_mode": "dual-strip",
+      "design_scale": 0.8,
+      "design_offset_x": 0.48950289699713073,
+      "design_offset_y": 0.50173194842932,
+      "overlay_mode": "footer"
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251201_160217/strip.jpg",
+      "full_page_path": "/data/photos/20251201_160217/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-01T16:02:50.891377",
+    "updated_at": "2025-12-01T16:02:51.264270"
+  },
   "c3a7c2dd-89c8-47da-9d70-4148b44c8029": {
     "job_id": "c3a7c2dd-89c8-47da-9d70-4148b44c8029",
     "job_type": "compose-strip",

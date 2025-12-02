@@ -31,6 +31,8 @@ from app.models.template import (
     LAYOUT_VERTICAL_4,
     LAYOUT_VERTICAL_6,
     LAYOUT_GRID_2X2,
+    OVERLAY_MODE_FREE,
+    OVERLAY_MODE_FOOTER,
     get_layout_dimensions,
 )
 
@@ -39,6 +41,8 @@ SUPPORTED_VERTICAL_LAYOUTS = {
     LAYOUT_VERTICAL_4,
     LAYOUT_VERTICAL_6,
 }
+
+FOOTER_HEIGHT_RATIO = 0.18
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -76,10 +80,12 @@ class ImageService:
         background_color: Optional[str] = None,
         photo_spacing: Optional[int] = None,
         photo_filter: Optional[str] = None,
+        overlay_mode: Optional[str] = None,
         # Optional free overlay controls (normalized / scale)
         design_scale: Optional[float] = None,
         design_offset_x: Optional[float] = None,
         design_offset_y: Optional[float] = None,
+        design_stretch: bool = False,
     ) -> Path:
         """
         Compone una tira de fotos + diseño personalizado.
@@ -139,16 +145,26 @@ class ImageService:
 
         design_exists = bool(design_path and design_path.exists())
 
-        # Modo overlay libre si hay diseño y al menos uno de los controles viene definido.
-        # Esto mantiene compatibilidad: templates antiguos (sin escala/offsets) siguen
-        # usando la banda fija arriba/abajo.
+        overlay_mode_clean = (overlay_mode or OVERLAY_MODE_FREE).strip().lower()
+        if overlay_mode_clean not in {OVERLAY_MODE_FREE, OVERLAY_MODE_FOOTER}:
+            print(f"⚠️ overlay_mode '{overlay_mode}' no soportado. Usando 'free'.")
+            overlay_mode_clean = OVERLAY_MODE_FREE
+
+        # Modo overlay libre a pantalla completa: solo cuando overlay_mode es 'free'
+        # y al menos uno de los controles viene definido. Templates antiguos sin
+        # escala/offsets siguen usando la banda fija arriba/abajo.
         use_free_overlay = bool(
-            design_exists and (
+            design_exists
+            and overlay_mode_clean == OVERLAY_MODE_FREE
+            and (
                 design_scale is not None
                 or design_offset_x is not None
                 or design_offset_y is not None
+                or design_stretch  # Stretch también activa modo overlay
             )
         )
+        is_footer_mode = bool(design_exists and overlay_mode_clean == OVERLAY_MODE_FOOTER)
+        use_legacy_band = bool(design_exists and not is_footer_mode and not use_free_overlay)
 
         # Calcular dimensiones objetivo basadas en layout
         strip_width = base_strip_width
@@ -158,9 +174,20 @@ class ImageService:
 
         # Calcular altura total del canvas dinámicamente
         num_photos = len(photo_paths)
-        # Reservar espacio vertical solo para el modo legacy de banda fija.
-        if design_exists and not use_free_overlay:
-            design_section_height = DESIGN_HEIGHT + PHOTO_SPACING
+        # Reservar espacio vertical para el diseño cuando se usa banda fija
+        # legacy o el modo footer. En modo overlay libre no reservamos banda.
+        footer_height = 0
+        if design_exists:
+            if is_footer_mode:
+                if target_strip_height:
+                    footer_height = int(target_strip_height * FOOTER_HEIGHT_RATIO)
+                else:
+                    footer_height = DESIGN_HEIGHT + PHOTO_SPACING
+                design_section_height = footer_height
+            elif use_legacy_band:
+                design_section_height = DESIGN_HEIGHT + PHOTO_SPACING
+            else:
+                design_section_height = 0
         else:
             design_section_height = 0
 
@@ -186,8 +213,8 @@ class ImageService:
             # Y offset inicial
             y_offset = TOP_MARGIN
 
-            # 0. Agregar diseño arriba si aplica (modo banda fija)
-            if design_exists and not use_free_overlay and design_position_normalized == DESIGN_POSITION_TOP:
+            # 0. Agregar diseño arriba si aplica (modo banda fija legacy)
+            if design_exists and use_legacy_band and design_position_normalized == DESIGN_POSITION_TOP:
                 y_offset = ImageService._paste_design(
                     strip,
                     design_path,
@@ -238,8 +265,8 @@ class ImageService:
                   # Forzar limpieza de memoria
                   gc.collect()
             
-            # 2. Agregar diseño abajo si aplica (modo banda fija)
-            if design_exists and not use_free_overlay and design_position_normalized == DESIGN_POSITION_BOTTOM:
+            # 2. Agregar diseño abajo si aplica (modo banda fija legacy)
+            if design_exists and use_legacy_band and design_position_normalized == DESIGN_POSITION_BOTTOM:
                 ImageService._paste_design(
                     strip,
                     design_path,
@@ -250,7 +277,7 @@ class ImageService:
                     spacing=PHOTO_SPACING
                 )
 
-            # 2b. Overlay libre (escala + offsets normalizados)
+            # 2b. Overlay libre (escala + offsets normalizados) en todo el strip
             if design_exists and use_free_overlay and design_path is not None:
                 ImageService._paste_design_free_overlay(
                     canvas=strip,
@@ -261,6 +288,25 @@ class ImageService:
                     design_offset_x=design_offset_x,
                     design_offset_y=design_offset_y,
                     design_position=design_position_normalized,
+                    design_stretch=design_stretch,
+                )
+
+            # 2c. Overlay en modo footer: reservar banda inferior y limitar el movimiento
+            if design_exists and is_footer_mode and design_path is not None and footer_height > 0:
+                footer_top = strip_height - BOTTOM_MARGIN - footer_height
+                if footer_top < TOP_MARGIN:
+                    footer_top = TOP_MARGIN
+
+                ImageService._paste_design_footer_overlay(
+                    canvas=strip,
+                    design_path=design_path,
+                    strip_width=strip_width,
+                    footer_top=footer_top,
+                    footer_height=footer_height,
+                    design_scale=design_scale,
+                    design_offset_x=design_offset_x,
+                    design_offset_y=design_offset_y,
+                    design_stretch=design_stretch,
                 )
             
             # 3. Guardar strip en carpeta de sesión para nomenclatura consistente
@@ -406,6 +452,118 @@ class ImageService:
             gc.collect()
 
     @staticmethod
+    def _paste_design_footer_overlay(
+        canvas: Image.Image,
+        design_path: Path,
+        strip_width: int,
+        footer_top: int,
+        footer_height: int,
+        design_scale: Optional[float],
+        design_offset_x: Optional[float],
+        design_offset_y: Optional[float],
+        design_stretch: bool = False,
+    ) -> None:
+        """Coloca el diseño dentro de una banda inferior reservada (footer).
+
+        - design_scale controla el ancho relativo al strip (0-1).
+        - design_offset_x controla la posición horizontal del centro (0-1) en todo el strip.
+        - design_offset_y controla la posición vertical del centro normalizada dentro del footer (0-1).
+        - design_stretch: si True, estira el diseño para llenar el footer completamente.
+        """
+        MIN_SCALE = 0.3
+        MAX_SCALE = 1.0
+        DEFAULT_SCALE = 1.0
+        DEFAULT_FOOTER_Y = 0.85  # Cerca de la parte baja de la banda
+
+        design = Image.open(design_path)
+
+        try:
+            if design.width <= 0 or design.height <= 0:
+                raise ValueError("Design image has invalid dimensions")
+
+            if design_stretch:
+                # MODO STRETCH: Llenar el footer completamente
+                # Ignoramos scale y offsets, forzamos ajuste exacto al footer
+                target_width = strip_width
+                target_height = footer_height
+                
+                # Posición fija (todo el footer)
+                left = 0
+                top = footer_top
+                
+                resized = design.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS,
+                )
+            else:
+                # MODO NORMAL: Respetar aspecto y usar controles
+                # Normalizar escala
+                scale = design_scale if design_scale is not None else DEFAULT_SCALE
+                if scale <= 0:
+                    scale = DEFAULT_SCALE
+                scale = max(MIN_SCALE, min(MAX_SCALE, scale))
+
+                # --- SAFETY CLAMP: Ensure design fits within footer height ---
+                # Calculate max scale allowed by footer height
+                # target_height = (strip_width * scale) / aspect_ratio
+                # We want target_height <= footer_height
+                # So: scale <= (footer_height * aspect_ratio) / strip_width
+                aspect_ratio = design.width / design.height
+                max_height_scale = (footer_height * aspect_ratio) / strip_width
+                
+                # Apply clamp: effective scale is min(requested, max_allowed)
+                scale = min(scale, max_height_scale)
+                # -----------------------------------------------------------
+
+                target_width = int(strip_width * scale)
+                target_height = max(1, int(target_width / aspect_ratio))
+
+                # Posición horizontal normalizada en todo el strip
+                center_x_norm = design_offset_x if design_offset_x is not None else 0.5
+                center_x_norm = max(0.0, min(1.0, center_x_norm))
+                center_x = center_x_norm * strip_width
+
+                # Posición vertical normalizada dentro del footer (0-1)
+                center_y_footer_norm = design_offset_y if design_offset_y is not None else DEFAULT_FOOTER_Y
+                center_y_footer_norm = max(0.0, min(1.0, center_y_footer_norm))
+                center_y = footer_top + center_y_footer_norm * footer_height
+
+                half_w = target_width / 2
+                half_h = target_height / 2
+
+                # Clamp horizontal dentro del canvas completo
+                center_x = max(half_w, min(strip_width - half_w, center_x))
+
+                # Clamp vertical dentro de la banda de footer
+                min_center_y = footer_top + half_h
+                max_center_y = footer_top + footer_height - half_h
+                if max_center_y < min_center_y:
+                    max_center_y = min_center_y
+                center_y = max(min_center_y, min(max_center_y, center_y))
+
+                left = int(center_x - half_w)
+                top = int(center_y - half_h)
+
+                resized = design.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS,
+                )
+
+            if resized.mode == "RGBA":
+                bg = Image.new("RGB", resized.size, "white")
+                bg.paste(resized, (0, 0), resized)
+                canvas.paste(bg, (left, top))
+                bg.close()
+            else:
+                canvas.paste(resized, (left, top))
+
+            resized.close()
+        finally:
+            design.close()
+            del design
+            gc.collect()
+
+    @staticmethod
     def _paste_design_free_overlay(
         canvas: Image.Image,
         design_path: Path,
@@ -415,11 +573,13 @@ class ImageService:
         design_offset_x: Optional[float],
         design_offset_y: Optional[float],
         design_position: str,
+        design_stretch: bool = False,
     ) -> None:
         """Coloca el diseño como overlay libre usando escala y offsets normalizados.
 
         - design_scale controla el ancho relativo al strip (0-1).
         - design_offset_x/y controlan la posición del centro en coordenadas normalizadas (0-1).
+        - design_stretch: si True, estira el diseño para llenar todo el strip.
         """
         # Usar rangos razonables para evitar valores extremos sin propagar magia por el código.
         MIN_SCALE = 0.3
@@ -434,44 +594,57 @@ class ImageService:
             if design.width <= 0 or design.height <= 0:
                 raise ValueError("Design image has invalid dimensions")
 
-            # Normalizar escala
-            scale = design_scale if design_scale is not None else DEFAULT_SCALE
-            if scale <= 0:
-                scale = DEFAULT_SCALE
-            scale = max(MIN_SCALE, min(MAX_SCALE, scale))
-
-            target_width = int(strip_width * scale)
-            # Mantener proporción original
-            aspect_ratio = design.width / design.height
-            target_height = max(1, int(target_width / aspect_ratio))
-
-            # Posición normalizada (0-1)
-            center_x_norm = design_offset_x if design_offset_x is not None else 0.5
-            if design_offset_y is not None:
-                center_y_norm = design_offset_y
+            if design_stretch:
+                # MODO STRETCH: Llenar todo el strip
+                target_width = strip_width
+                target_height = strip_height
+                left = 0
+                top = 0
+                
+                resized = design.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS,
+                )
             else:
-                center_y_norm = DEFAULT_TOP_Y if design_position == DESIGN_POSITION_TOP else DEFAULT_BOTTOM_Y
+                # MODO NORMAL
+                # Normalizar escala
+                scale = design_scale if design_scale is not None else DEFAULT_SCALE
+                if scale <= 0:
+                    scale = DEFAULT_SCALE
+                scale = max(MIN_SCALE, min(MAX_SCALE, scale))
 
-            center_x_norm = max(0.0, min(1.0, center_x_norm))
-            center_y_norm = max(0.0, min(1.0, center_y_norm))
+                target_width = int(strip_width * scale)
+                # Mantener proporción original
+                aspect_ratio = design.width / design.height
+                target_height = max(1, int(target_width / aspect_ratio))
 
-            center_x = center_x_norm * strip_width
-            center_y = center_y_norm * strip_height
+                # Posición normalizada (0-1)
+                center_x_norm = design_offset_x if design_offset_x is not None else 0.5
+                if design_offset_y is not None:
+                    center_y_norm = design_offset_y
+                else:
+                    center_y_norm = DEFAULT_TOP_Y if design_position == DESIGN_POSITION_TOP else DEFAULT_BOTTOM_Y
 
-            half_w = target_width / 2
-            half_h = target_height / 2
+                center_x_norm = max(0.0, min(1.0, center_x_norm))
+                center_y_norm = max(0.0, min(1.0, center_y_norm))
 
-            # Clamp para que el diseño no se salga completamente del canvas
-            center_x = max(half_w, min(strip_width - half_w, center_x))
-            center_y = max(half_h, min(strip_height - half_h, center_y))
+                center_x = center_x_norm * strip_width
+                center_y = center_y_norm * strip_height
 
-            left = int(center_x - half_w)
-            top = int(center_y - half_h)
+                half_w = target_width / 2
+                half_h = target_height / 2
 
-            resized = design.resize(
-                (target_width, target_height),
-                Image.Resampling.LANCZOS,
-            )
+                # Clamp para que el diseño no se salga completamente del canvas
+                center_x = max(half_w, min(strip_width - half_w, center_x))
+                center_y = max(half_h, min(strip_height - half_h, center_y))
+
+                left = int(center_x - half_w)
+                top = int(center_y - half_h)
+
+                resized = design.resize(
+                    (target_width, target_height),
+                    Image.Resampling.LANCZOS,
+                )
 
             if resized.mode == "RGBA":
                 bg = Image.new("RGB", resized.size, "white")

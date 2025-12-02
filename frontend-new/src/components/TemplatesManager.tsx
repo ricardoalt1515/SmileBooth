@@ -27,6 +27,7 @@ import {
   LAYOUT_LABELS,
   DESIGN_POSITION_LABELS,
   getLayoutPhotoCount,
+  OVERLAY_MODE_FREE,
 } from '../types/template';
 import {
   Card,
@@ -144,6 +145,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
             design_scale: tpl.design_scale ?? null,
             design_offset_x: tpl.design_offset_x ?? null,
             design_offset_y: tpl.design_offset_y ?? null,
+            overlay_mode: tpl.overlay_mode ?? OVERLAY_MODE_FREE,
           });
           previewEntries[tpl.id] = url;
         } catch (error) {

@@ -16,18 +16,25 @@ export const DESIGN_POSITION_BOTTOM = 'bottom' as const;
 export const DESIGN_POSITION_LEFT = 'left' as const;
 export const DESIGN_POSITION_RIGHT = 'right' as const;
 
+export const OVERLAY_MODE_FREE = 'free' as const;
+export const OVERLAY_MODE_FOOTER = 'footer' as const;
+
 // Type definitions
-export type LayoutType = 
+export type LayoutType =
   | typeof LAYOUT_3X1_VERTICAL
   | typeof LAYOUT_4X1_VERTICAL
   | typeof LAYOUT_6X1_VERTICAL
   | typeof LAYOUT_2X2_GRID;
 
-export type DesignPositionType = 
+export type DesignPositionType =
   | typeof DESIGN_POSITION_TOP
   | typeof DESIGN_POSITION_BOTTOM
   | typeof DESIGN_POSITION_LEFT
   | typeof DESIGN_POSITION_RIGHT;
+
+export type OverlayModeType =
+  | typeof OVERLAY_MODE_FREE
+  | typeof OVERLAY_MODE_FOOTER;
 
 /**
  * Template model - matches backend exactly
@@ -38,11 +45,13 @@ export interface Template {
   layout: LayoutType;
   design_file_path: string | null;
   design_position: DesignPositionType;
+  overlay_mode: OverlayModeType;
   // Optional free overlay controls (normalized / scale)
   // When all are null/undefined, backend usa el modo legacy de banda fija.
   design_scale?: number | null;
   design_offset_x?: number | null;
   design_offset_y?: number | null;
+  design_stretch?: boolean;
   background_color: string;
   photo_spacing: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
@@ -58,12 +67,14 @@ export interface TemplateCreate {
   name: string;
   layout: LayoutType;
   design_position: DesignPositionType;
+  overlay_mode: OverlayModeType;
   background_color: string;
   photo_spacing: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
   design_scale?: number | null;
   design_offset_x?: number | null;
   design_offset_y?: number | null;
+  design_stretch?: boolean;
 }
 
 /**
@@ -74,12 +85,29 @@ export interface TemplateUpdate {
   layout?: LayoutType;
   design_file_path?: string;
   design_position?: DesignPositionType;
+  overlay_mode?: OverlayModeType;
   background_color?: string;
   photo_spacing?: number;
   photo_filter?: 'none' | 'bw' | 'sepia' | 'glam';
   design_scale?: number | null;
   design_offset_x?: number | null;
   design_offset_y?: number | null;
+  design_stretch?: boolean;
+}
+
+export interface FormData {
+  name: string;
+  layout: LayoutType;
+  design_file: File | null;
+  design_position: DesignPositionType;
+  overlay_mode: OverlayModeType;
+  background_color: string;
+  photo_spacing: number;
+  photo_filter: 'none' | 'bw' | 'sepia' | 'glam';
+  design_scale: number;
+  design_offset_x: number;
+  design_offset_y: number;
+  design_stretch: boolean;
 }
 
 /**
@@ -138,13 +166,13 @@ export function getLayoutPhotoCount(layout: LayoutType): number {
  */
 export function getLayoutDimensions(layout: LayoutType): { width: number; height: number } {
   const stripWidth = 600;
-  
+
   const dimensionMap: Record<LayoutType, { width: number; height: number }> = {
     [LAYOUT_3X1_VERTICAL]: { width: stripWidth, height: 1800 },
     [LAYOUT_4X1_VERTICAL]: { width: stripWidth, height: 2400 },
     [LAYOUT_6X1_VERTICAL]: { width: stripWidth, height: 3000 },
     [LAYOUT_2X2_GRID]: { width: stripWidth, height: 1800 },
   };
-  
+
   return dimensionMap[layout];
 }

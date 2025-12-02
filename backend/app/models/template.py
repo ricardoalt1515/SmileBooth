@@ -23,9 +23,13 @@ DESIGN_POSITION_BOTTOM = "bottom"
 DESIGN_POSITION_LEFT = "left"
 DESIGN_POSITION_RIGHT = "right"
 
+OVERLAY_MODE_FREE = "free"
+OVERLAY_MODE_FOOTER = "footer"
+
 # Valid layout options
 LayoutType = Literal["3x1-vertical", "4x1-vertical", "6x1-vertical", "2x2-grid"]
 DesignPositionType = Literal["top", "bottom", "left", "right"]
+OverlayModeType = Literal["free", "footer"]
 
 
 class Template(BaseModel):
@@ -55,6 +59,10 @@ class Template(BaseModel):
         default=DESIGN_POSITION_BOTTOM,
         description="Where to place the design element"
     )
+    overlay_mode: OverlayModeType = Field(
+        default=OVERLAY_MODE_FREE,
+        description="Overlay behavior: 'free' (floating) or 'footer' (reserved bottom band)"
+    )
     # Optional free overlay controls (normalized / scale)
     design_scale: float | None = Field(
         default=None,
@@ -67,6 +75,10 @@ class Template(BaseModel):
     design_offset_y: float | None = Field(
         default=None,
         description="Optional normalized vertical center position for the design (0-1)."
+    )
+    design_stretch: bool = Field(
+        default=False,
+        description="If true, stretches the design to fill the target area (ignoring aspect ratio)."
     )
     # Visual settings
     background_color: str = Field(
@@ -106,12 +118,14 @@ class TemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     layout: LayoutType = LAYOUT_VERTICAL_3
     design_position: DesignPositionType = DESIGN_POSITION_BOTTOM
+    overlay_mode: OverlayModeType = OVERLAY_MODE_FREE
     background_color: str = "#FFFFFF"
     photo_spacing: int = Field(default=20, ge=0, le=100)
     photo_filter: str = "none"
     design_scale: float | None = None
     design_offset_x: float | None = None
     design_offset_y: float | None = None
+    design_stretch: bool = False
 
 
 class TemplateUpdate(BaseModel):
@@ -120,12 +134,14 @@ class TemplateUpdate(BaseModel):
     layout: LayoutType | None = None
     design_file_path: str | None = None
     design_position: DesignPositionType | None = None
+    overlay_mode: OverlayModeType | None = None
     background_color: str | None = None
     photo_spacing: int | None = Field(default=None, ge=0, le=100)
     photo_filter: str | None = None
     design_scale: float | None = None
     design_offset_x: float | None = None
     design_offset_y: float | None = None
+    design_stretch: bool | None = None
 
 
 def get_layout_photo_count(layout: LayoutType) -> int:

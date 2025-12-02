@@ -46,7 +46,7 @@
     "strip_path": "/data/photos/preview/strip.jpg",
     "print_jobs": [],
     "created_at": "2025-11-15T15:01:55.447005",
-    "updated_at": "2025-12-01T14:05:33.722734",
+    "updated_at": "2025-12-01T22:13:00.231414",
     "notes": null
   },
   "20251115_150447": {
@@ -1174,6 +1174,168 @@
     "print_jobs": [],
     "created_at": "2025-12-01T08:35:38.988441",
     "updated_at": "2025-12-01T08:36:12.870870",
+    "notes": null
+  },
+  "20251201_160217": {
+    "session_id": "20251201_160217",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251201_160217/shot-1.jpg",
+        "url": "/data/photos/20251201_160217/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251201_160217/thumb-1.jpg",
+        "captured_at": "2025-12-01T16:02:17.822579"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251201_160217/shot-2.jpg",
+        "url": "/data/photos/20251201_160217/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251201_160217/thumb-2.jpg",
+        "captured_at": "2025-12-01T16:02:27.230274"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251201_160217/shot-3.jpg",
+        "url": "/data/photos/20251201_160217/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251201_160217/thumb-3.jpg",
+        "captured_at": "2025-12-01T16:02:36.585708"
+      }
+    ],
+    "strip_path": "/data/photos/20251201_160217/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251201_160317",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-12-01T16:03:17.130670",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-12-01T16:02:17.823554",
+    "updated_at": "2025-12-01T16:03:17.131293",
+    "notes": null
+  },
+  "20251201_205234": {
+    "session_id": "20251201_205234",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251201_205234/shot-1.jpg",
+        "url": "/data/photos/20251201_205234/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251201_205234/thumb-1.jpg",
+        "captured_at": "2025-12-01T20:52:34.506829"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251201_205234/shot-2.jpg",
+        "url": "/data/photos/20251201_205234/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251201_205234/thumb-2.jpg",
+        "captured_at": "2025-12-01T20:52:44.098396"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251201_205234/shot-3.jpg",
+        "url": "/data/photos/20251201_205234/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251201_205234/thumb-3.jpg",
+        "captured_at": "2025-12-01T20:52:53.544418"
+      }
+    ],
+    "strip_path": "/data/photos/20251201_205234/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-12-01T20:52:34.508274",
+    "updated_at": "2025-12-01T20:53:08.922535",
+    "notes": null
+  },
+  "20251201_211605": {
+    "session_id": "20251201_211605",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "printed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251201_211605/shot-1.jpg",
+        "url": "/data/photos/20251201_211605/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251201_211605/thumb-1.jpg",
+        "captured_at": "2025-12-01T21:16:05.079662"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251201_211605/shot-2.jpg",
+        "url": "/data/photos/20251201_211605/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251201_211605/thumb-2.jpg",
+        "captured_at": "2025-12-01T21:16:14.467407"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251201_211605/shot-3.jpg",
+        "url": "/data/photos/20251201_211605/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251201_211605/thumb-3.jpg",
+        "captured_at": "2025-12-01T21:16:23.870813"
+      }
+    ],
+    "strip_path": "/data/photos/20251201_211605/strip.jpg",
+    "print_jobs": [
+      {
+        "job_id": "job_20251201_211706",
+        "printer_name": "Virtual_Printer_Fallback",
+        "copies": 1,
+        "requested_at": "2025-12-01T21:17:06.712473",
+        "status": "sent",
+        "error_message": null
+      }
+    ],
+    "created_at": "2025-12-01T21:16:05.080126",
+    "updated_at": "2025-12-01T21:17:06.713040",
+    "notes": null
+  },
+  "20251201_221232": {
+    "session_id": "20251201_221232",
+    "preset_id": null,
+    "preset_name": null,
+    "template_id": null,
+    "template_layout": null,
+    "status": "composed",
+    "photos": [
+      {
+        "filename": "shot-1.jpg",
+        "path": "/data/photos/20251201_221232/shot-1.jpg",
+        "url": "/data/photos/20251201_221232/shot-1.jpg",
+        "thumbnail_url": "/data/photos/20251201_221232/thumb-1.jpg",
+        "captured_at": "2025-12-01T22:12:32.091208"
+      },
+      {
+        "filename": "shot-2.jpg",
+        "path": "/data/photos/20251201_221232/shot-2.jpg",
+        "url": "/data/photos/20251201_221232/shot-2.jpg",
+        "thumbnail_url": "/data/photos/20251201_221232/thumb-2.jpg",
+        "captured_at": "2025-12-01T22:12:41.506135"
+      },
+      {
+        "filename": "shot-3.jpg",
+        "path": "/data/photos/20251201_221232/shot-3.jpg",
+        "url": "/data/photos/20251201_221232/shot-3.jpg",
+        "thumbnail_url": "/data/photos/20251201_221232/thumb-3.jpg",
+        "captured_at": "2025-12-01T22:12:50.907177"
+      }
+    ],
+    "strip_path": "/data/photos/20251201_221232/strip.jpg",
+    "print_jobs": [],
+    "created_at": "2025-12-01T22:12:32.091816",
+    "updated_at": "2025-12-01T22:13:06.432480",
     "notes": null
   }
 }

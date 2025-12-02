@@ -19,11 +19,16 @@ import {
   TemplateCreate,
   LayoutType,
   DesignPositionType,
+  OverlayModeType,
   LAYOUT_LABELS,
   DESIGN_POSITION_LABELS,
   LAYOUT_3X1_VERTICAL,
+  LAYOUT_4X1_VERTICAL,
+  LAYOUT_2X2_GRID,
   DESIGN_POSITION_BOTTOM,
   DESIGN_POSITION_TOP,
+  OVERLAY_MODE_FREE,
+  OVERLAY_MODE_FOOTER,
   getLayoutPhotoCount,
 } from '../types/template';
 import {
@@ -63,6 +68,7 @@ const DEFAULT_DESIGN_SCALE = 1.0;
 const DEFAULT_OFFSET_X = 0.5; // Centro horizontal
 const DEFAULT_OFFSET_Y_TOP = 0.2;
 const DEFAULT_OFFSET_Y_BOTTOM = 0.8;
+const FOOTER_HEIGHT_RATIO = 0.18; // Debe mantenerse razonablemente alineado con backend
 // Fotos demo persistidas en disco para que el backend pueda generar preview real
 // Se crean en backend/app/services/demo_assets.py y viven bajo /data/demo/
 const DEMO_PHOTOS = [
@@ -83,13 +89,15 @@ interface FormData {
   name: string;
   layout: LayoutType;
   design_position: DesignPositionType;
+  overlay_mode: OverlayModeType;
   background_color: string;
   photo_spacing: number;
   photo_filter: 'none' | 'bw' | 'sepia' | 'glam';
-   // Overlay controls para el diseño (normalizados)
-   design_scale: number; // 0-1, relativo al ancho del strip
-   design_offset_x: number; // 0-1, centro horizontal
-   design_offset_y: number; // 0-1, centro vertical
+  // Overlay controls para el diseño (normalizados)
+  design_scale: number; // 0-1, relativo al ancho del strip
+  design_offset_x: number; // 0-1, centro horizontal
+  design_offset_y: number; // 0-1, centro vertical
+  design_stretch: boolean;
 }
 
 interface ValidationError {
@@ -106,6 +114,7 @@ export default function TemplateDialog({
   const toast = useToastContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewStripRef = useRef<HTMLDivElement | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
   // Form state - Single purpose per variable
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -121,6 +130,39 @@ export default function TemplateDialog({
   const [demoPhotos, setDemoPhotos] = useState<string[]>(DEMO_PHOTOS);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isOverlayDragging, setIsOverlayDragging] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Formats definition
+  const PRINT_FORMATS = [
+    {
+      id: 'classic',
+      label: 'Tira Clásica (3 fotos)',
+      layout: LAYOUT_3X1_VERTICAL,
+      overlay_mode: OVERLAY_MODE_FREE,
+      description: 'Diseño limpio con 3 fotos verticales.'
+    },
+    {
+      id: 'footer',
+      label: 'Tira con Logo (3 fotos + Footer)',
+      layout: LAYOUT_3X1_VERTICAL,
+      overlay_mode: OVERLAY_MODE_FOOTER,
+      description: '3 fotos con espacio dedicado abajo para tu marca.'
+    },
+    {
+      id: '4photo',
+      label: 'Tira de 4 fotos',
+      layout: LAYOUT_4X1_VERTICAL,
+      overlay_mode: OVERLAY_MODE_FREE,
+      description: '4 fotos verticales aprovechando todo el espacio.'
+    },
+    {
+      id: 'grid',
+      label: 'Postal (Grid 2x2)',
+      layout: LAYOUT_2X2_GRID,
+      overlay_mode: OVERLAY_MODE_FREE,
+      description: '4 fotos en cuadrícula estilo postal.'
+    }
+  ] as const;
 
   // Helper: Get initial form data - Single source of truth
   function getInitialFormData(): FormData {
@@ -128,12 +170,14 @@ export default function TemplateDialog({
       name: '',
       layout: LAYOUT_3X1_VERTICAL,
       design_position: DESIGN_POSITION_BOTTOM,
+      overlay_mode: OVERLAY_MODE_FREE,
       background_color: DEFAULT_BACKGROUND_COLOR,
       photo_spacing: DEFAULT_PHOTO_SPACING,
       photo_filter: 'none',
       design_scale: DEFAULT_DESIGN_SCALE,
       design_offset_x: DEFAULT_OFFSET_X,
       design_offset_y: DEFAULT_OFFSET_Y_BOTTOM,
+      design_stretch: false,
     };
   }
 
@@ -145,6 +189,7 @@ export default function TemplateDialog({
         name: editingTemplate.name,
         layout: editingTemplate.layout,
         design_position: editingTemplate.design_position,
+        overlay_mode: editingTemplate.overlay_mode ?? OVERLAY_MODE_FREE,
         background_color: editingTemplate.background_color,
         photo_spacing: editingTemplate.photo_spacing,
         photo_filter: (editingTemplate.photo_filter as FormData['photo_filter']) || 'none',
@@ -155,6 +200,7 @@ export default function TemplateDialog({
           (editingTemplate.design_position === DESIGN_POSITION_TOP
             ? DEFAULT_OFFSET_Y_TOP
             : DEFAULT_OFFSET_Y_BOTTOM),
+        design_stretch: editingTemplate.design_stretch ?? false,
       });
 
       // Set preview if has design
@@ -248,6 +294,8 @@ export default function TemplateDialog({
           design_scale: formData.design_scale,
           design_offset_x: formData.design_offset_x,
           design_offset_y: formData.design_offset_y,
+          overlay_mode: formData.overlay_mode,
+          design_stretch: formData.design_stretch,
         });
         setStripPreviewUrl(previewImage);
       } catch (error) {
@@ -264,19 +312,43 @@ export default function TemplateDialog({
   const updateOverlayPositionFromPoint = useCallback((clientX: number, clientY: number) => {
     const container = previewStripRef.current;
     if (!container) return;
-    const rect = container.getBoundingClientRect();
+
+    const imageEl = previewImageRef.current;
+    const rect = (imageEl ?? container).getBoundingClientRect();
     if (!rect.width || !rect.height) {
       return;
     }
+
     const normX = (clientX - rect.left) / rect.width;
     const normY = (clientY - rect.top) / rect.height;
     const clampedX = Math.min(1, Math.max(0, normX));
     const clampedY = Math.min(1, Math.max(0, normY));
-    setFormData((prev) => ({
-      ...prev,
-      design_offset_x: clampedX,
-      design_offset_y: clampedY,
-    }));
+
+    setFormData((prev) => {
+      const overlayMode = prev.overlay_mode;
+
+      if (overlayMode === OVERLAY_MODE_FOOTER) {
+        const footerStart = 1 - FOOTER_HEIGHT_RATIO;
+        // Forzar el punto dentro de la banda inferior
+        const withinFooter = Math.min(1, Math.max(footerStart, clampedY));
+        const relative = FOOTER_HEIGHT_RATIO > 0
+          ? (withinFooter - footerStart) / FOOTER_HEIGHT_RATIO
+          : 0;
+        const relativeClamped = Math.min(1, Math.max(0, relative));
+
+        return {
+          ...prev,
+          design_offset_x: clampedX,
+          design_offset_y: relativeClamped,
+        };
+      }
+
+      return {
+        ...prev,
+        design_offset_x: clampedX,
+        design_offset_y: clampedY,
+      };
+    });
   }, []);
 
   const handleOverlayDragStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -333,6 +405,23 @@ export default function TemplateDialog({
       window.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [isOverlayDragging, updateOverlayPositionFromPoint]);
+
+  const handleResetDesignAuto = useCallback(() => {
+    setFormData((prev) => {
+      // Smart Default Logic:
+      // - Footer Mode: Scale 0.8 (80%) to leave safe margin. No stretch.
+      // - Free Mode: Scale 1.0 (100%) and Stretch (assuming full frame).
+      const isFooter = prev.overlay_mode === OVERLAY_MODE_FOOTER;
+
+      return {
+        ...prev,
+        design_scale: isFooter ? 0.8 : 1.0,
+        design_offset_x: DEFAULT_OFFSET_X,
+        design_offset_y: prev.design_position === DESIGN_POSITION_TOP ? DEFAULT_OFFSET_Y_TOP : DEFAULT_OFFSET_Y_BOTTOM,
+        design_stretch: !isFooter, // Auto-stretch for free mode (frames), safe margin for footer
+      };
+    });
+  }, []);
 
   // Validation: Validate form data - Returns errors array
   const validateFormData = useCallback((data: FormData): ValidationError[] => {
@@ -492,7 +581,19 @@ export default function TemplateDialog({
 
       if (editingTemplate) {
         // Update existing template
-        await photoboothAPI.templates.update(editingTemplate.id, formData);
+        await photoboothAPI.templates.update(editingTemplate.id, {
+          name: formData.name,
+          layout: formData.layout,
+          design_position: formData.design_position,
+          overlay_mode: formData.overlay_mode,
+          background_color: formData.background_color,
+          photo_spacing: formData.photo_spacing,
+          photo_filter: formData.photo_filter,
+          design_scale: formData.design_scale,
+          design_offset_x: formData.design_offset_x,
+          design_offset_y: formData.design_offset_y,
+          design_stretch: formData.design_stretch,
+        });
         templateId = editingTemplate.id;
         toast.success('Template actualizado');
       } else {
@@ -501,12 +602,14 @@ export default function TemplateDialog({
           name: formData.name,
           layout: formData.layout,
           design_position: formData.design_position,
+          overlay_mode: formData.overlay_mode,
           background_color: formData.background_color,
           photo_spacing: formData.photo_spacing,
           photo_filter: formData.photo_filter,
           design_scale: formData.design_scale,
           design_offset_x: formData.design_offset_x,
           design_offset_y: formData.design_offset_y,
+          design_stretch: formData.design_stretch,
         };
 
         const newTemplate = await photoboothAPI.templates.create(templateData);
@@ -545,6 +648,16 @@ export default function TemplateDialog({
     const count = getLayoutPhotoCount(formData.layout);
     return `${count} ${count === 1 ? 'foto' : 'fotos'}`;
   };
+
+  const clampedDesignScale = Math.min(
+    MAX_DESIGN_SCALE,
+    Math.max(MIN_DESIGN_SCALE, formData.design_scale),
+  );
+
+  const overlayTopPercent =
+    formData.overlay_mode === OVERLAY_MODE_FOOTER
+      ? (1 - FOOTER_HEIGHT_RATIO + formData.design_offset_y * FOOTER_HEIGHT_RATIO) * 100
+      : formData.design_offset_y * 100;
 
   // Handler para controlar el cierre del diálogo
   const handleOpenChange = (newOpen: boolean) => {
@@ -678,217 +791,322 @@ export default function TemplateDialog({
               </div>
 
               {/* Layout y apariencia */}
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Layout y apariencia</Label>
                   <Badge variant="outline" className="text-xs">
                     {getPhotoCountDisplay()}
                   </Badge>
                 </div>
-                {/* Layout Selection */}
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <Label htmlFor="layout" className="text-sm font-medium">Layout</Label>
-                    <Select
-                      value={formData.layout}
-                      onValueChange={(value: LayoutType) =>
-                        setFormData({ ...formData, layout: value })
-                      }
-                    >
-                      <SelectTrigger id="layout" className="w-full h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(LAYOUT_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {getPhotoCountDisplay()}
-                    </p>
-                  </div>
 
-                  {/* Design Position */}
-                  <div className="space-y-3">
-                    <Label htmlFor="design_position" className="text-sm font-medium">Posición del Diseño</Label>
-                    <Select
-                      value={formData.design_position}
-                      onValueChange={(value: DesignPositionType) =>
-                        setFormData({ ...formData, design_position: value })
-                      }
-                    >
-                      <SelectTrigger id="design_position" className="w-full h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(DESIGN_POSITION_LABELS)
-                          .filter(([value]) => SUPPORTED_POSITIONS.includes(value as DesignPositionType))
-                          .map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                {/* Print Format Selector (High Level) */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Formato de Impresión</Label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {PRINT_FORMATS.map((format) => {
+                      const isSelected =
+                        formData.layout === format.layout &&
+                        formData.overlay_mode === format.overlay_mode;
+
+                      return (
+                        <div
+                          key={format.id}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              layout: format.layout,
+                              overlay_mode: format.overlay_mode,
+                              // Reset design position if needed, or keep current
+                            }));
+                          }}
+                          className={`
+                            relative flex items-start space-x-3 rounded-lg border p-4 cursor-pointer transition-all hover:bg-muted/50
+                            ${isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-muted'}
+                          `}
+                        >
+                          <div className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-primary' : 'border-muted-foreground'}`}>
+                            {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium leading-none">{format.label}</p>
+                            <p className="text-xs text-muted-foreground">{format.description}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Styling Options */}
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Background Color */}
-                  <div className="space-y-3">
-                    <Label htmlFor="background_color" className="text-sm font-medium">Color de Fondo</Label>
-                    <div className="flex gap-3">
-                      <Input
-                        id="background_color"
-                        type="color"
-                        value={formData.background_color}
-                        onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
-                        className="w-14 h-11 p-1 cursor-pointer"
-                      />
-                      <Input
-                        type="text"
-                        value={formData.background_color}
-                        onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
-                        placeholder="#FFFFFF"
-                        className="flex-1 h-11 font-mono"
-                      />
+                {/* Advanced Options Toggle */}
+                <div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="text-xs text-muted-foreground h-8 px-2"
+                  >
+                    {showAdvanced ? 'Ocultar opciones avanzadas' : 'Mostrar opciones avanzadas (Layout manual)'}
+                  </Button>
+                </div>
+
+                {/* Advanced Options (Collapsible) */}
+                {showAdvanced && (
+                  <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-dashed animate-in fade-in slide-in-from-top-2">
+                    {/* Layout Selection */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <Label htmlFor="layout" className="text-sm font-medium">Layout Manual</Label>
+                        <Select
+                          value={formData.layout}
+                          onValueChange={(value: LayoutType) =>
+                            setFormData({ ...formData, layout: value })
+                          }
+                        >
+                          <SelectTrigger id="layout" className="w-full h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(LAYOUT_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Design Position */}
+                      <div className="space-y-3">
+                        <Label htmlFor="design_position" className="text-sm font-medium">Posición del Diseño</Label>
+                        <Select
+                          value={formData.design_position}
+                          onValueChange={(value: DesignPositionType) =>
+                            setFormData({ ...formData, design_position: value })
+                          }
+                        >
+                          <SelectTrigger id="design_position" className="w-full h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(DESIGN_POSITION_LABELS)
+                              .filter(([value]) => SUPPORTED_POSITIONS.includes(value as DesignPositionType))
+                              .map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Overlay Mode */}
+                    <div className="space-y-3">
+                      <Label htmlFor="overlay_mode" className="text-sm font-medium">Modo de diseño</Label>
+                      <Select
+                        value={formData.overlay_mode}
+                        onValueChange={(value: OverlayModeType) =>
+                          setFormData({ ...formData, overlay_mode: value })
+                        }
+                      >
+                        <SelectTrigger id="overlay_mode" className="w-full h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={OVERLAY_MODE_FREE}>Libre (sobre toda la tira)</SelectItem>
+                          <SelectItem value={OVERLAY_MODE_FOOTER}>Logo en pie de página</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Photo Spacing */}
-                  <div className="space-y-3">
-                    <Label htmlFor="photo_spacing" className="text-sm font-medium">
-                      Espaciado ({MIN_PHOTO_SPACING}-{MAX_PHOTO_SPACING}px)
-                    </Label>
+              {/* Styling Options */}
+              <div className="grid grid-cols-2 gap-8">
+                {/* Background Color */}
+                <div className="space-y-3">
+                  <Label htmlFor="background_color" className="text-sm font-medium">Color de Fondo</Label>
+                  <div className="flex gap-3">
                     <Input
-                      id="photo_spacing"
-                      type="number"
-                      min={MIN_PHOTO_SPACING}
-                      max={MAX_PHOTO_SPACING}
-                      value={formData.photo_spacing}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        photo_spacing: parseInt(e.target.value, 10) || DEFAULT_PHOTO_SPACING
-                      })}
-                      className={`h-11 ${errors.find(e => e.field === 'photo_spacing') ? 'border-destructive' : ''}`}
+                      id="background_color"
+                      type="color"
+                      value={formData.background_color}
+                      onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
+                      className="w-14 h-11 p-1 cursor-pointer"
                     />
-                  </div>
-
-                  {/* Photo Filter */}
-                  <div className="space-y-3 col-span-2">
-                    <Label htmlFor="photo_filter" className="text-sm font-medium">Filtro de fotos</Label>
-                    <Select
-                      value={formData.photo_filter}
-                      onValueChange={(value: FormData['photo_filter']) =>
-                        setFormData({ ...formData, photo_filter: value })
-                      }
-                    >
-                      <SelectTrigger id="photo_filter" className="w-full h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin filtro</SelectItem>
-                        <SelectItem value="bw">Blanco y negro</SelectItem>
-                        <SelectItem value="sepia">Sepia cálido</SelectItem>
-                        <SelectItem value="glam">Glam / Belleza suave</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Este filtro se aplicará a las fotos de este diseño en cámara, preview y tira final.
-                    </p>
+                    <Input
+                      type="text"
+                      value={formData.background_color}
+                      onChange={(e) => setFormData({ ...formData, background_color: e.target.value })}
+                      placeholder="#FFFFFF"
+                      className="flex-1 h-11 font-mono"
+                    />
                   </div>
                 </div>
 
-                {/* Design size & position */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-semibold">Tamaño y posición del diseño</Label>
+                {/* Photo Spacing */}
+                <div className="space-y-3">
+                  <Label htmlFor="photo_spacing" className="text-sm font-medium">
+                    Espaciado ({MIN_PHOTO_SPACING}-{MAX_PHOTO_SPACING}px)
+                  </Label>
+                  <Input
+                    id="photo_spacing"
+                    type="number"
+                    min={MIN_PHOTO_SPACING}
+                    max={MAX_PHOTO_SPACING}
+                    value={formData.photo_spacing}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      photo_spacing: parseInt(e.target.value, 10) || DEFAULT_PHOTO_SPACING
+                    })}
+                    className={`h-11 ${errors.find(e => e.field === 'photo_spacing') ? 'border-destructive' : ''}`}
+                  />
+                </div>
+
+                {/* Photo Filter */}
+                <div className="space-y-3 col-span-2">
+                  <Label htmlFor="photo_filter" className="text-sm font-medium">Filtro de fotos</Label>
+                  <Select
+                    value={formData.photo_filter}
+                    onValueChange={(value: FormData['photo_filter']) =>
+                      setFormData({ ...formData, photo_filter: value })
+                    }
+                  >
+                    <SelectTrigger id="photo_filter" className="w-full h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin filtro</SelectItem>
+                      <SelectItem value="bw">Blanco y negro</SelectItem>
+                      <SelectItem value="sepia">Sepia cálido</SelectItem>
+                      <SelectItem value="glam">Glam / Belleza suave</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Este filtro se aplicará a las fotos de este diseño en cámara, preview y tira final.
+                  </p>
+                </div>
+              </div>
+
+              {/* Design size & position */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Tamaño y posición del diseño</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-muted-foreground"
+                      onClick={handleResetDesignAuto}
+                    >
+                      Restablecer automático
+                    </Button>
                     <Badge variant="outline" className="text-xs">
                       {Math.round(formData.design_scale * 100)}%
                     </Badge>
                   </div>
+                </div>
 
-                  {/* Scale slider */}
-                  <div className="space-y-2">
+                {/* Scale slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <Label htmlFor="design_scale" className="text-sm font-medium">
                       Tamaño del diseño
                     </Label>
-                    <input
-                      id="design_scale"
-                      type="range"
-                      min={MIN_DESIGN_SCALE * 100}
-                      max={MAX_DESIGN_SCALE * 100}
-                      value={formData.design_scale * 100}
-                      onChange={(e) => {
-                        const value = Number(e.target.value) || DEFAULT_DESIGN_SCALE * 100;
-                        const scale = Math.min(MAX_DESIGN_SCALE, Math.max(MIN_DESIGN_SCALE, value / 100));
-                        setFormData({
-                          ...formData,
-                          design_scale: scale,
-                        });
-                      }}
-                      className="w-full cursor-pointer"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Ajusta qué tanto ancho ocupa tu arte dentro de la tira.
-                    </p>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="design_stretch"
+                        checked={formData.design_stretch}
+                        onChange={(e) => setFormData({ ...formData, design_stretch: e.target.checked })}
+                        className="h-4 w-4 rounded border-primary text-primary focus:ring-primary"
+                      />
+                      <Label htmlFor="design_stretch" className="text-xs font-normal cursor-pointer">
+                        Llenar zona (Estirar)
+                      </Label>
+                    </div>
                   </div>
+                  <input
+                    id="design_scale"
+                    type="range"
+                    min={MIN_DESIGN_SCALE * 100}
+                    max={MAX_DESIGN_SCALE * 100}
+                    value={formData.design_scale * 100}
+                    disabled={formData.design_stretch}
+                    onChange={(e) => {
+                      const value = Number(e.target.value) || DEFAULT_DESIGN_SCALE * 100;
+                      const scale = Math.min(MAX_DESIGN_SCALE, Math.max(MIN_DESIGN_SCALE, value / 100));
+                      setFormData({
+                        ...formData,
+                        design_scale: scale,
+                      });
+                    }}
+                    className={`w-full cursor-pointer ${formData.design_stretch ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {formData.design_stretch
+                      ? 'El diseño se estirará para llenar el espacio disponible.'
+                      : 'Ajusta qué tanto ancho ocupa tu arte dentro de la tira.'}
+                  </p>
+                </div>
 
-                  {/* Vertical position slider */}
-                  <div className="space-y-2">
-                    <Label htmlFor="design_offset_y" className="text-sm font-medium">
-                      Altura del diseño
-                    </Label>
-                    <input
-                      id="design_offset_y"
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={Math.round(formData.design_offset_y * 100)}
-                      onChange={(e) => {
-                        const value = Number(e.target.value) || 0;
-                        const norm = Math.min(1, Math.max(0, value / 100));
-                        setFormData({
-                          ...formData,
-                          design_offset_y: norm,
-                        });
-                      }}
-                      className="w-full cursor-pointer"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0% = arriba, 100% = abajo. El diseño siempre se mantiene dentro de la tira.
-                    </p>
-                  </div>
+                {/* Vertical position slider */}
+                <div className="space-y-2">
+                  <Label htmlFor="design_offset_y" className="text-sm font-medium">
+                    Altura del diseño
+                  </Label>
+                  <input
+                    id="design_offset_y"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(formData.design_offset_y * 100)}
+                    disabled={formData.design_stretch}
+                    onChange={(e) => {
+                      const value = Number(e.target.value) || 0;
+                      const norm = Math.min(1, Math.max(0, value / 100));
+                      setFormData({
+                        ...formData,
+                        design_offset_y: norm,
+                      });
+                    }}
+                    className={`w-full cursor-pointer ${formData.design_stretch ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {formData.overlay_mode === OVERLAY_MODE_FOOTER
+                      ? '0% = parte superior de la banda, 100% = borde inferior de la banda.'
+                      : '0% = arriba, 100% = abajo. El diseño siempre se mantiene dentro de la tira.'}
+                  </p>
+                </div>
 
-                  {/* Horizontal position slider */}
-                  <div className="space-y-2">
-                    <Label htmlFor="design_offset_x" className="text-sm font-medium">
-                      Posición horizontal
-                    </Label>
-                    <input
-                      id="design_offset_x"
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={Math.round(formData.design_offset_x * 100)}
-                      onChange={(e) => {
-                        const value = Number(e.target.value) || 50;
-                        const norm = Math.min(1, Math.max(0, value / 100));
-                        setFormData({
-                          ...formData,
-                          design_offset_x: norm,
-                        });
-                      }}
-                      className="w-full cursor-pointer"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0% = izquierda, 100% = derecha.
-                    </p>
-                  </div>
+                {/* Horizontal position slider */}
+                <div className="space-y-2">
+                  <Label htmlFor="design_offset_x" className="text-sm font-medium">
+                    Posición horizontal
+                  </Label>
+                  <input
+                    id="design_offset_x"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(formData.design_offset_x * 100)}
+                    disabled={formData.design_stretch}
+                    onChange={(e) => {
+                      const value = Number(e.target.value) || 50;
+                      const norm = Math.min(1, Math.max(0, value / 100));
+                      setFormData({
+                        ...formData,
+                        design_offset_x: norm,
+                      });
+                    }}
+                    className={`w-full cursor-pointer ${formData.design_stretch ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    0% = izquierda, 100% = derecha.
+                  </p>
                 </div>
               </div>
             </div>
@@ -930,6 +1148,7 @@ export default function TemplateDialog({
                   <>
                     <div className="absolute inset-0 bg-white animate-in fade-in duration-500">
                       <img
+                        ref={previewImageRef}
                         src={stripPreviewUrl}
                         alt="Preview Real"
                         className="w-full h-full object-contain"
@@ -943,19 +1162,40 @@ export default function TemplateDialog({
                     {(designPreviewPath || editingTemplate?.design_file_path) && (
                       <div
                         className={`absolute rounded-lg border-2 border-primary/70 bg-primary/10 shadow-sm cursor-move select-none flex items-center justify-center text-[10px] text-primary-foreground/80 ${isOverlayDragging ? 'ring-2 ring-primary/60' : ''}`}
-                        style={{
+                        style={formData.design_stretch ? {
+                          left: '50%',
+                          top: formData.overlay_mode === OVERLAY_MODE_FOOTER
+                            ? `${(1 - FOOTER_HEIGHT_RATIO / 2) * 100}%`
+                            : '50%',
+                          width: '100%',
+                          height: formData.overlay_mode === OVERLAY_MODE_FOOTER
+                            ? `${FOOTER_HEIGHT_RATIO * 100}%`
+                            : '100%',
+                          transform: 'translate(-50%, -50%)',
+                          aspectRatio: 'unset',
+                          pointerEvents: 'none',
+                        } : {
                           left: `${formData.design_offset_x * 100}%`,
-                          top: `${formData.design_offset_y * 100}%`,
-                          width: `${Math.min(MAX_DESIGN_SCALE, Math.max(MIN_DESIGN_SCALE, formData.design_scale)) * 100}%`,
+                          top: `${overlayTopPercent}%`,
+                          width: `${clampedDesignScale * 100}%`,
                           transform: 'translate(-50%, -50%)',
                           aspectRatio: '4 / 3',
                           pointerEvents: 'auto',
                         }}
-                        onMouseDown={handleOverlayDragStart}
-                        onTouchStart={handleOverlayTouchStart}
+                        onMouseDown={!formData.design_stretch ? handleOverlayDragStart : undefined}
+                        onTouchStart={!formData.design_stretch ? handleOverlayTouchStart : undefined}
                       >
-                        <span>Arrastra para mover</span>
+                        {!formData.design_stretch && <span>Arrastra para mover</span>}
                       </div>
+                    )}
+                    {formData.overlay_mode === OVERLAY_MODE_FOOTER && (
+                      <div
+                        className="pointer-events-none absolute inset-x-6 rounded-t-md border-t border-black/10 bg-black/5"
+                        style={{
+                          bottom: '6%',
+                          height: `${FOOTER_HEIGHT_RATIO * 100}%`,
+                        }}
+                      />
                     )}
                   </>
                 ) : (
@@ -1047,7 +1287,7 @@ export default function TemplateDialog({
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </DialogContent >
+    </Dialog >
   );
 }

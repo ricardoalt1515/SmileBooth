@@ -527,6 +527,7 @@ export default function UnifiedBoothScreen() {
         design_scale: activeTemplate?.design_scale ?? null,
         design_offset_x: activeTemplate?.design_offset_x ?? null,
         design_offset_y: activeTemplate?.design_offset_y ?? null,
+        overlay_mode: activeTemplate?.overlay_mode ?? 'free',
       });
 
       console.log('✅ Preview generado:', previewUrl);

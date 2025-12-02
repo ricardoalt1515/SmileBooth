@@ -63,9 +63,11 @@ def _compose_strip_core(request: ComposeStripRequest) -> ComposeStripResponse:
             background_color=request.background_color,
             photo_spacing=request.photo_spacing,
             photo_filter=request.photo_filter,
+            overlay_mode=request.overlay_mode,
             design_scale=request.design_scale,
             design_offset_x=request.design_offset_x,
             design_offset_y=request.design_offset_y,
+            design_stretch=bool(request.design_stretch) if request.design_stretch is not None else False,
         )
     except Exception as compose_err:
         traceback.print_exc()
@@ -143,6 +145,8 @@ async def preview_strip(
     design_scale: float | None = Form(None),
     design_offset_x: float | None = Form(None),
     design_offset_y: float | None = Form(None),
+    overlay_mode: str | None = Form(None),
+    design_stretch: bool | None = Form(None),
 ):
     """
     Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
@@ -174,6 +178,14 @@ async def preview_strip(
             payload["design_offset_x"] = design_offset_x
         if design_offset_y is not None:
             payload["design_offset_y"] = design_offset_y
+        if overlay_mode is not None:
+            payload["overlay_mode"] = overlay_mode
+        if design_stretch is not None:
+            # FastAPI parsea bool de form como str a veces; forzar a bool explícito
+            if isinstance(design_stretch, str):
+                payload["design_stretch"] = design_stretch.lower() in {"1", "true", "yes", "on"}
+            else:
+                payload["design_stretch"] = bool(design_stretch)
 
         # Asegurar que vengan photo_paths válidas
         if not payload.get("photo_paths"):
@@ -231,9 +243,11 @@ async def preview_strip(
             background_color=request_obj.background_color,
             photo_spacing=request_obj.photo_spacing,
             photo_filter=request_obj.photo_filter,
+            overlay_mode=request_obj.overlay_mode,
             design_scale=request_obj.design_scale,
             design_offset_x=request_obj.design_offset_x,
             design_offset_y=request_obj.design_offset_y,
+            design_stretch=bool(request_obj.design_stretch) if request_obj.design_stretch is not None else False,
         )
         
         # Mover a temp
