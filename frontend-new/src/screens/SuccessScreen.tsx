@@ -21,9 +21,18 @@ export default function SuccessScreen() {
     defaultPrinter,
     reset,
     setCurrentScreen,
+    autoPrint,
+    kioskMode,
   } = useAppStore();
 
-  const [countdown, setCountdown] = useState(autoResetSeconds || 30);
+  const fastAutoResetLimit = 10;
+  const effectiveBaseReset = autoResetSeconds || 30;
+  const initialCountdown =
+    autoPrint && kioskMode
+      ? Math.min(effectiveBaseReset, fastAutoResetLimit)
+      : effectiveBaseReset;
+
+  const [countdown, setCountdown] = useState(initialCountdown);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [selectedCopies, setSelectedCopies] = useState(printCopies || 1);

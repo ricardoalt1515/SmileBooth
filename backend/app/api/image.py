@@ -39,6 +39,59 @@ def _resolve_photo_and_design_paths(request: ComposeStripRequest) -> tuple[list[
     return photo_paths, design_path
 
 
+def _cleanup_temp_dir() -> None:
+    """Aplica una limpieza ligera sobre TEMP_DIR.
+
+    - Elimina archivos más antiguos que ``cleanup_after_hours``.
+    - Si hay más de ``max_temp_files``, elimina los más antiguos.
+    """
+    max_files = RESOURCE_LIMITS.get("max_temp_files", 100)
+    max_age_hours = RESOURCE_LIMITS.get("cleanup_after_hours", 24)
+    if max_files <= 0 and max_age_hours <= 0:
+        return
+
+    try:
+        entries = [
+            p for p in TEMP_DIR.iterdir()
+            if p.is_file()
+        ]
+    except FileNotFoundError:
+        return
+
+    if not entries:
+        return
+
+    import time as _time
+
+    now = _time.time()
+    max_age_seconds = max_age_hours * 3600
+
+    # 1) Eliminar archivos demasiado viejos
+    remaining: list[Path] = []
+    for p in entries:
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            continue
+        if max_age_seconds > 0 and (now - mtime) > max_age_seconds:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        else:
+            remaining.append(p)
+
+    # 2) Si siguen quedando demasiados, eliminar los más antiguos
+    if max_files > 0 and len(remaining) > max_files:
+        remaining.sort(key=lambda p: p.stat().st_mtime)
+        to_delete = remaining[:-max_files]
+        for p in to_delete:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+
+
 def _compose_strip_core(request: ComposeStripRequest) -> ComposeStripResponse:
     """Core composition logic reused by sync and job endpoints."""
     photo_paths, design_path = _resolve_photo_and_design_paths(request)
@@ -150,9 +203,11 @@ async def preview_strip(
     design_stretch: bool | None = Form(None),
     photo_aspect_ratio: str | None = Form(None),
 ):
-    """
-    Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
-    Si se envía design_file (multipart), se usa ese archivo temporalmente.
+    """Genera un preview temporal del strip y devuelve la ruta servible (/data/...).
+
+    Si se envía ``design_file`` (multipart), se usa ese archivo temporalmente.
+    También aplica una limpieza ligera de ``TEMP_DIR`` basada en ``RESOURCE_LIMITS``
+    para evitar crecimiento descontrolado de archivos temporales.
     """
     try:
         # Reconstruir request si vino multipart con strings
@@ -264,6 +319,10 @@ async def preview_strip(
             shutil.rmtree(preview_dir)
         
         preview_relative = "/" + str(preview_path.relative_to(DATA_DIR.parent))
+
+        # Limpieza ligera después de generar el preview
+        _cleanup_temp_dir()
+
         return {"preview_path": preview_relative}
 
     except HTTPException:
@@ -277,12 +336,17 @@ async def preview_strip(
 
 @router.post("/design-preview-upload")
 async def design_preview_upload(file: UploadFile = File(...)):
-    """
-    Sube un diseño temporal para previews y devuelve su ruta servible (/data/...).
+    """Sube un diseño temporal para previews y devuelve su ruta servible (/data/...).
+
+    También ejecuta una limpieza ligera sobre ``TEMP_DIR`` para no acumular
+    demasiados PNG/JPG temporales.
     """
     try:
         design_path = _save_temp_design_file(file)
         relative = "/" + str(design_path.relative_to(DATA_DIR.parent))
+
+        _cleanup_temp_dir()
+
         return {"design_path": relative}
     except HTTPException:
         raise

@@ -142,6 +142,13 @@ export default function TemplateDialog({
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Constants - Avoid magic numbers
+  const PREVIEW_DEBOUNCE_MS = 1200;
+
+  // Separate concerns: UI state (immediate) vs Preview state (debounced)
+  // Purpose: Prevent preview regeneration on every keystroke/slider move
+  const [previewConfig, setPreviewConfig] = useState(formData);
+
   // State separation: Design (input) vs Strip (output)
   const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null); // visual del archivo subido/existente
   const [designPreviewPath, setDesignPreviewPath] = useState<string | null>(null); // ruta servible (/data/...) para backend
@@ -220,6 +227,7 @@ export default function TemplateDialog({
         design_stretch: editingTemplate.design_stretch ?? false,
         photo_aspect_ratio: (editingTemplate as any).photo_aspect_ratio ?? 'auto',
       });
+      setPreviewConfig(formData);
 
       // Set preview if has design
       if (editingTemplate.design_file_path) {
@@ -239,6 +247,15 @@ export default function TemplateDialog({
     setSelectedFile(null);
     setErrors([]);
   }, [editingTemplate, open]);
+
+  // Debounce: Only update preview config after user stops interacting
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPreviewConfig(formData);
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [formData]);
 
   // Load demo photos once to render real previews (fallback a placeholders si no hay)
   useEffect(() => {
@@ -270,28 +287,15 @@ export default function TemplateDialog({
     };
   }, [designPreviewUrl]);
 
-  const {
-    layout,
-    design_position,
-    overlay_mode,
-    background_color,
-    photo_spacing,
-    photo_filter,
-    design_scale,
-    design_offset_x,
-    design_offset_y,
-    design_stretch,
-    photo_aspect_ratio,
-  } = formData;
-
-  // Render real preview using demo photos (reusing them if layout necesita más)
+  // Generate live preview - Only when previewConfig changes (debounced)
   useEffect(() => {
     if (!open || !ENABLE_LIVE_PREVIEW) {
       setStripPreviewUrl(null);
       return;
     }
 
-    const needs = getLayoutPhotoCount(layout);
+    // Fail fast - Need demo photos
+    const needs = getLayoutPhotoCount(previewConfig.layout);
 
     // Sin fotos demo no podemos generar preview real
     if (!demoPhotos.length) {
@@ -318,17 +322,17 @@ export default function TemplateDialog({
         const previewImage = await photoboothAPI.image.previewStrip({
           photo_paths: effectivePhotos,
           design_path: designPreviewPath ?? editingTemplate?.design_file_path ?? null,
-          layout,
-          design_position,
-          background_color,
-          photo_spacing,
-          photo_filter,
-          design_scale,
-          design_offset_x,
-          design_offset_y,
-          overlay_mode,
-          design_stretch,
-          photo_aspect_ratio,
+          layout: previewConfig.layout,
+          design_position: previewConfig.design_position,
+          background_color: previewConfig.background_color,
+          photo_spacing: previewConfig.photo_spacing,
+          photo_filter: previewConfig.photo_filter,
+          design_scale: previewConfig.design_scale,
+          design_offset_x: previewConfig.design_offset_x,
+          design_offset_y: previewConfig.design_offset_y,
+          overlay_mode: previewConfig.overlay_mode,
+          design_stretch: previewConfig.design_stretch,
+          photo_aspect_ratio: previewConfig.photo_aspect_ratio,
         });
         setStripPreviewUrl(previewImage);
       } catch (error) {
@@ -337,11 +341,14 @@ export default function TemplateDialog({
       } finally {
         setIsLoadingPreview(false);
       }
-    }, 800); // Increased debounce to reduce flickering
+    }, 100); // Small additional debounce for safety
 
     return () => clearTimeout(timer);
-  }, [
-    open,
+  }, [open, previewConfig, demoPhotos, designPreviewPath, editingTemplate]);
+  // ✅ Only 5 dependencies now (was 18+)
+
+  // Extract current form values for use in handlers - Good names
+  const {
     layout,
     design_position,
     overlay_mode,
@@ -353,107 +360,148 @@ export default function TemplateDialog({
     design_offset_y,
     design_stretch,
     photo_aspect_ratio,
-    demoPhotos,
-    editingTemplate,
-    designPreviewPath,
-  ]);
+  } = formData;
 
-  const updateOverlayPositionFromPoint = useCallback((clientX: number, clientY: number) => {
+  // Constants - Avoid magic numbers
+  const DRAG_UPDATE_THRESHOLD = 0.001; // Minimum position change to trigger update
+
+  // useRef para posición temporal - No causa re-renders
+  const tempOverlayPosition = useRef({
+    x: design_offset_x,
+    y: design_offset_y,
+  });
+
+  // Sync refs when formData changes externally (sliders, reset button)
+  useEffect(() => {
+    tempOverlayPosition.current = {
+      x: formData.design_offset_x,
+      y: formData.design_offset_y,
+    };
+  }, [formData.design_offset_x, formData.design_offset_y]);
+
+  /**
+   * Update overlay visual position without triggering re-renders.
+   * Only updates DOM directly via data attribute.
+   *
+   * @param clientX - Mouse/touch X coordinate
+   * @param clientY - Mouse/touch Y coordinate
+   */
+  const updateOverlayVisual = useCallback((clientX: number, clientY: number) => {
     const container = previewStripRef.current;
-    if (!container) return;
-
     const imageEl = previewImageRef.current;
-    const rect = (imageEl ?? container).getBoundingClientRect();
-    if (!rect.width || !rect.height) {
+    if (!container || !imageEl) return;
+
+    const rect = imageEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    // Calculate normalized position (0-1)
+    const normX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const normY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+
+    // Handle footer mode constraint
+    let finalY = normY;
+    if (formData.overlay_mode === OVERLAY_MODE_FOOTER) {
+      const footerStart = 1 - FOOTER_HEIGHT_RATIO;
+      const withinFooter = Math.max(footerStart, Math.min(1, normY));
+      finalY = FOOTER_HEIGHT_RATIO > 0
+        ? (withinFooter - footerStart) / FOOTER_HEIGHT_RATIO
+        : 0;
+    }
+
+    // Store in ref (no re-render)
+    tempOverlayPosition.current = { x: normX, y: finalY };
+
+    // Update visual directly in DOM (60fps, no React)
+    const overlayBox = document.querySelector('[data-overlay-box]') as HTMLElement;
+    if (overlayBox) {
+      const visualY = formData.overlay_mode === OVERLAY_MODE_FOOTER
+        ? (1 - FOOTER_HEIGHT_RATIO + finalY * FOOTER_HEIGHT_RATIO) * 100
+        : finalY * 100;
+
+      overlayBox.style.left = `${normX * 100}%`;
+      overlayBox.style.top = `${visualY}%`;
+    }
+  }, [formData.overlay_mode]);
+
+  /**
+   * Commit position change to formData.
+   * Only called on drag end - triggers preview regeneration.
+   *
+   * Fail Fast: Only updates if position actually changed.
+   */
+  const commitOverlayPosition = useCallback(() => {
+    const currentX = formData.design_offset_x;
+    const currentY = formData.design_offset_y;
+    const newX = tempOverlayPosition.current.x;
+    const newY = tempOverlayPosition.current.y;
+
+    // Fail fast - Skip if no meaningful change
+    const deltaX = Math.abs(newX - currentX);
+    const deltaY = Math.abs(newY - currentY);
+    if (deltaX < DRAG_UPDATE_THRESHOLD && deltaY < DRAG_UPDATE_THRESHOLD) {
       return;
     }
 
-    const normX = (clientX - rect.left) / rect.width;
-    const normY = (clientY - rect.top) / rect.height;
-    const clampedX = Math.min(1, Math.max(0, normX));
-    const clampedY = Math.min(1, Math.max(0, normY));
+    // Single update - triggers preview once
+    setFormData(prev => ({
+      ...prev,
+      design_offset_x: newX,
+      design_offset_y: newY,
+    }));
+  }, [formData.design_offset_x, formData.design_offset_y]);
 
-    setFormData((prev) => {
-      const overlayMode = prev.overlay_mode;
-
-      if (overlayMode === OVERLAY_MODE_FOOTER) {
-        const footerStart = 1 - FOOTER_HEIGHT_RATIO;
-        // Forzar el punto dentro de la banda inferior
-        const withinFooter = Math.min(1, Math.max(footerStart, clampedY));
-        const relative = FOOTER_HEIGHT_RATIO > 0
-          ? (withinFooter - footerStart) / FOOTER_HEIGHT_RATIO
-          : 0;
-        const relativeClamped = Math.min(1, Math.max(0, relative));
-
-        return {
-          ...prev,
-          design_offset_x: clampedX,
-          design_offset_y: relativeClamped,
-        };
-      }
-
-      return {
-        ...prev,
-        design_offset_x: clampedX,
-        design_offset_y: clampedY,
-      };
-    });
-  }, []);
-
+  // Mouse handlers - DRY with shared logic
   const handleOverlayDragStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (isSubmitting) return;
+    if (isSubmitting || formData.design_stretch) return;
     e.preventDefault();
     e.stopPropagation();
     setIsOverlayDragging(true);
-    updateOverlayPositionFromPoint(e.clientX, e.clientY);
-  }, [isSubmitting, updateOverlayPositionFromPoint]);
+    updateOverlayVisual(e.clientX, e.clientY);
+  }, [isSubmitting, formData.design_stretch, updateOverlayVisual]);
 
+  // Touch handlers - DRY principle
   const handleOverlayTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (isSubmitting) return;
+    if (isSubmitting || formData.design_stretch) return;
     e.preventDefault();
-    e.stopPropagation();
     const touch = e.touches[0];
     if (!touch) return;
     setIsOverlayDragging(true);
-    updateOverlayPositionFromPoint(touch.clientX, touch.clientY);
-  }, [isSubmitting, updateOverlayPositionFromPoint]);
+    updateOverlayVisual(touch.clientX, touch.clientY);
+  }, [isSubmitting, formData.design_stretch, updateOverlayVisual]);
 
+  // Global drag tracking - One purpose: handle drag movement
   useEffect(() => {
     if (!isOverlayDragging) return;
 
-    const handleMouseMove = (event: MouseEvent) => {
+    const handleMove = (event: MouseEvent) => {
       event.preventDefault();
-      updateOverlayPositionFromPoint(event.clientX, event.clientY);
-    };
-
-    const handleMouseUp = () => {
-      setIsOverlayDragging(false);
+      updateOverlayVisual(event.clientX, event.clientY);
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (!event.touches.length) return;
-      const touch = event.touches[0];
-      updateOverlayPositionFromPoint(touch.clientX, touch.clientY);
+      if (!event.touches[0]) return;
+      updateOverlayVisual(event.touches[0].clientX, event.touches[0].clientY);
     };
 
-    const handleTouchEnd = () => {
+    const handleEnd = () => {
       setIsOverlayDragging(false);
+      commitOverlayPosition(); // ✅ Only 1 update on drag end
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
     window.addEventListener('touchmove', handleTouchMove);
-    window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('touchcancel', handleTouchEnd);
+    window.addEventListener('touchend', handleEnd);
+    window.addEventListener('touchcancel', handleEnd);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
       window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchEnd);
+      window.removeEventListener('touchend', handleEnd);
+      window.removeEventListener('touchcancel', handleEnd);
     };
-  }, [isOverlayDragging, updateOverlayPositionFromPoint]);
+  }, [isOverlayDragging, updateOverlayVisual, commitOverlayPosition]);
 
   const handleResetDesignAuto = useCallback(() => {
     setFormData((prev) => {
@@ -937,11 +985,18 @@ export default function TemplateDialog({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(LAYOUT_LABELS).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
+                            {Object.entries(LAYOUT_LABELS).map(([value, label]) => {
+                              const isGrid = value === LAYOUT_2X2_GRID;
+                              return (
+                                <SelectItem
+                                  key={value}
+                                  value={value}
+                                  disabled={isGrid}
+                                >
+                                  {isGrid ? `${label} (próximamente)` : label}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1239,6 +1294,7 @@ export default function TemplateDialog({
                     </div>
                     {(designPreviewPath || editingTemplate?.design_file_path) && (
                       <div
+                        data-overlay-box
                         className={`absolute rounded-lg border-2 border-primary/70 bg-primary/10 shadow-sm cursor-move select-none flex items-center justify-center text-[10px] text-primary-foreground/80 ${isOverlayDragging ? 'ring-2 ring-primary/60' : ''}`}
                         style={formData.design_stretch ? {
                           left: '50%',

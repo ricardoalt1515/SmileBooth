@@ -367,7 +367,7 @@ class ImageService:
             if strip:
                 strip.close()
                 del strip
-            gc.collect()
+            # Python's generational GC handles cleanup efficiently
     
     @staticmethod
     def _process_photo(
@@ -479,7 +479,7 @@ class ImageService:
         finally:
             design.close()
             del design
-            gc.collect()
+            # Python's GC handles cleanup efficiently
 
     @staticmethod
     def _paste_design_footer_overlay(
@@ -591,7 +591,7 @@ class ImageService:
         finally:
             design.close()
             del design
-            gc.collect()
+            # Python's GC handles cleanup efficiently
 
     @staticmethod
     def _paste_design_free_overlay(
@@ -688,7 +688,7 @@ class ImageService:
         finally:
             design.close()
             del design
-            gc.collect()
+            # Python's GC handles cleanup efficiently
     
     @staticmethod
     def create_duplicate_strip(strip_path: Path) -> Path:
@@ -741,4 +741,4 @@ class ImageService:
             strip.close()
             full_page.close()
             del strip, full_page
-            gc.collect()
+            # Python's GC handles cleanup efficiently

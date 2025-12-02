@@ -154,6 +154,15 @@ export const DESIGN_POSITION_LABELS: Record<DesignPositionType, string> = {
 };
 
 /**
+ * Human-readable labels for photo aspect ratios
+ */
+export const PHOTO_ASPECT_RATIO_LABELS: Record<PhotoAspectRatioType, string> = {
+  auto: 'Auto (según layout)',
+  '1:1': '1:1 (cuadrada)',
+  '3:4': '3:4 (vertical)',
+};
+
+/**
  * Helper: Get photo count for a layout
  * Single source of truth for layout -> count mapping
  */

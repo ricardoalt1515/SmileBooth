@@ -26,8 +26,8 @@ import {
   TemplatesListResponse,
   LAYOUT_LABELS,
   DESIGN_POSITION_LABELS,
+  PHOTO_ASPECT_RATIO_LABELS,
   getLayoutPhotoCount,
-  OVERLAY_MODE_FREE,
 } from '../types/template';
 import {
   Card,
@@ -53,6 +53,9 @@ import TemplateDialog from './TemplateDialog';
 // Constants - Avoid magic numbers
 const PREVIEW_PLACEHOLDER_COLOR = '#e5e7eb';
 const ACTIVE_TEMPLATE_BORDER_COLOR = 'border-2 border-primary';
+const MAX_CONCURRENT_PREVIEWS = 6; // Increased from 3 for faster loading
+const MAX_CACHE_SIZE = 50; // Prevent unbounded memory growth
+
 // Fotos demo persistidas en disco (se crean en backend/app/services/demo_assets.py)
 const DEMO_PHOTOS = [
   '/data/demo/demo1.jpg',
@@ -60,6 +63,67 @@ const DEMO_PHOTOS = [
   '/data/demo/demo3.jpg',
   '/data/demo/demo4.jpg',
 ];
+
+// Cache singleton - Lives outside component (persists across renders)
+// Purpose: Avoid regenerating previews for templates we've seen before
+const PREVIEW_CACHE = new Map<string, string>();
+
+/**
+ * Get or generate preview for a template.
+ * Returns cached URL if available, generates otherwise.
+ *
+ * Fail Fast: Returns immediately on cache hit.
+ *
+ * @param template - Template to preview
+ * @param demoPhotos - Demo photos for preview generation
+ * @returns Promise<string> Preview URL (base64 data URL)
+ */
+async function getOrGeneratePreview(
+  template: Template,
+  demoPhotos: string[]
+): Promise<string> {
+  const cacheKey = template.id;
+
+  // Return cached if available - Fail fast on cache hit
+  if (PREVIEW_CACHE.has(cacheKey)) {
+    return PREVIEW_CACHE.get(cacheKey)!;
+  }
+
+  // Generate preview (original logic)
+  const photoCount = getLayoutPhotoCount(template.layout);
+  const photoPaths = Array.from({ length: photoCount }, (_, i) =>
+    demoPhotos[i % demoPhotos.length]
+  );
+
+  const previewUrl = await photoboothAPI.image.previewStrip({
+    photo_paths: photoPaths,
+    design_path: template.design_file_path,
+    layout: template.layout,
+    design_position: template.design_position,
+    background_color: template.background_color,
+    photo_spacing: template.photo_spacing,
+    photo_filter: template.photo_filter,
+    design_scale: template.design_scale ?? null,
+    design_offset_x: template.design_offset_x ?? null,
+    design_offset_y: template.design_offset_y ?? null,
+    overlay_mode: template.overlay_mode ?? null,
+    design_stretch: template.design_stretch ?? false,
+    photo_aspect_ratio: (template as any).photo_aspect_ratio ?? null,
+  });
+
+  // Cache for next time
+  PREVIEW_CACHE.set(cacheKey, previewUrl);
+
+  // Cleanup old entries - Keep cache bounded
+  if (PREVIEW_CACHE.size > MAX_CACHE_SIZE) {
+    const firstKey = PREVIEW_CACHE.keys().next().value;
+    if (firstKey !== undefined) {
+      PREVIEW_CACHE.delete(firstKey);
+    }
+  }
+
+  return previewUrl;
+}
 
 interface TemplatesManagerProps {
   onTemplateActivated?: (template: Template) => void;
@@ -80,7 +144,6 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
   const [duplicateTemplateId, setDuplicateTemplateId] = useState<string | null>(null);
   
   const toast = useToastContext();
-
   // Load templates - Returns nothing, updates state
   const loadTemplates = useCallback(async () => {
     try {
@@ -96,6 +159,13 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
     }
   }, [toast]);
 
+  const handleTemplateDialogSuccess = useCallback(async () => {
+    // Cualquier cambio de template (crear/editar) invalida el caché ligero
+    // para asegurar que los previews se regeneren con los nuevos datos.
+    PREVIEW_CACHE.clear();
+    await loadTemplates();
+  }, [loadTemplates]);
+
   // Load on mount
   useEffect(() => {
     loadTemplates();
@@ -108,73 +178,69 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
     setDemoPhotos(DEMO_PHOTOS);
   }, []);
 
-  // Generate previews; si las fotos demo no son rutas en disco, usamos placeholders
+  /**
+   * Generate previews for all templates.
+   * Uses cache to avoid regenerating seen templates.
+   * Processes in batches for better concurrency.
+   */
   useEffect(() => {
-    const generatePreviews = async () => {
-      if (!templates.length || !demoPhotos.length) return;
+    // Fail fast - Skip if no templates or no demo photos
+    if (templates.length === 0 || demoPhotos.length === 0) {
+      setIsGeneratingPreview(false);
+      return;
+    }
 
-      // Si los demo no son rutas en disco, intentamos usar las rutas fijas por defecto
-      const allArePaths = demoPhotos.every((p) => p.startsWith('/'));
-      const basePhotos = allArePaths ? demoPhotos : DEMO_PHOTOS;
+    let cancelled = false;
 
-      // Verificamos que al menos una ruta parezca válida
-      if (!basePhotos.length) {
-        setPreviewMap({});
-        return;
-      }
+    async function generatePreviews() {
+      try {
+        setIsGeneratingPreview(true);
+        const newPreviews: Record<string, string> = {};
 
-      setIsGeneratingPreview(true);
-      const previewEntries: Record<string, string> = {};
-      const needs = (layout: string) => getLayoutPhotoCount(layout as any);
-      const MAX_CONCURRENT_PREVIEWS = 3;
+        // Process templates in batches for better performance
+        for (let i = 0; i < templates.length; i += MAX_CONCURRENT_PREVIEWS) {
+          if (cancelled) break;
 
-      for (let i = 0; i < templates.length; i += MAX_CONCURRENT_PREVIEWS) {
-        const batch = templates.slice(i, i + MAX_CONCURRENT_PREVIEWS);
+          const batch = templates.slice(i, i + MAX_CONCURRENT_PREVIEWS);
 
-        const results = await Promise.all(
-          batch.map(async (tpl) => {
-            try {
-              const required = needs(tpl.layout);
-              const effectivePhotos = Array.from({ length: required }, (_, idx) =>
-                basePhotos[idx % basePhotos.length]
-              );
+          // Generate batch previews in parallel
+          const results = await Promise.all(
+            batch.map(async (tpl) => {
+              try {
+                const url = await getOrGeneratePreview(tpl, demoPhotos);
+                return { id: tpl.id, url };
+              } catch (error) {
+                console.error(`Error generating preview for ${tpl.name}:`, error);
+                return { id: tpl.id, url: '' };
+              }
+            })
+          );
 
-              const url = await photoboothAPI.image.previewStrip({
-                photo_paths: effectivePhotos,
-                design_path: tpl.design_file_path ?? null,
-                layout: tpl.layout,
-                design_position: tpl.design_position,
-                background_color: tpl.background_color,
-                photo_spacing: tpl.photo_spacing,
-                photo_filter: tpl.photo_filter as any,
-                design_scale: tpl.design_scale ?? null,
-                design_offset_x: tpl.design_offset_x ?? null,
-                design_offset_y: tpl.design_offset_y ?? null,
-                overlay_mode: tpl.overlay_mode ?? OVERLAY_MODE_FREE,
-                design_stretch: tpl.design_stretch ?? false,
-                photo_aspect_ratio: (tpl as any).photo_aspect_ratio ?? 'auto',
-              });
-              return { id: tpl.id, url };
-            } catch (error) {
-              console.warn('No se pudo generar preview para template', tpl.id, error);
-              return null;
-            }
-          })
-        );
+          // Accumulate results
+          results.forEach(({ id, url }) => {
+            if (url) newPreviews[id] = url;
+          });
+        }
 
-        for (const result of results) {
-          if (result && result.url) {
-            previewEntries[result.id] = result.url;
-          }
+        if (!cancelled) {
+          setPreviewMap((prev) => ({ ...prev, ...newPreviews }));
+        }
+      } catch (error) {
+        console.error('Error generating previews:', error);
+        toast.error('Error generando previews');
+      } finally {
+        if (!cancelled) {
+          setIsGeneratingPreview(false);
         }
       }
-
-      setPreviewMap(previewEntries);
-      setIsGeneratingPreview(false);
-    };
+    }
 
     generatePreviews();
-  }, [templates, demoPhotos]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [templates, demoPhotos, toast]);
 
   // Handler: Activate template
   const handleActivate = async (templateId: string, templateName: string) => {
@@ -281,6 +347,12 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Espaciado:</span>
                   <span className="font-medium">{activeTemplate.photo_spacing}px</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Forma de foto:</span>
+                  <span className="font-medium">
+                    {PHOTO_ASPECT_RATIO_LABELS[(activeTemplate.photo_aspect_ratio ?? 'auto') as keyof typeof PHOTO_ASPECT_RATIO_LABELS]}
+                  </span>
                 </div>
               </div>
 
@@ -403,6 +475,12 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
                       <span className="text-muted-foreground">Espaciado:</span>
                       <span>{template.photo_spacing}px</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Forma de foto:</span>
+                      <span>
+                        {PHOTO_ASPECT_RATIO_LABELS[(template.photo_aspect_ratio ?? 'auto') as keyof typeof PHOTO_ASPECT_RATIO_LABELS]}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -499,7 +577,7 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
       <TemplateDialog
         open={isTemplateDialogOpen}
         onOpenChange={setIsTemplateDialogOpen}
-        onSuccess={loadTemplates}
+        onSuccess={handleTemplateDialogSuccess}
         editingTemplate={editingTemplate}
       />
 
