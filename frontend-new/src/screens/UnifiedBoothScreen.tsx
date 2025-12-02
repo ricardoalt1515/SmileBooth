@@ -506,7 +506,7 @@ export default function UnifiedBoothScreen() {
           console.log('✅ Template activo:', {
             name: activeTemplate.name,
             background_color: activeTemplate.background_color,
-            photo_spacing: activeTemplate.photo_spacing
+            photo_spacing: activeTemplate.photo_spacing,
           });
         }
       } catch (err) {
@@ -528,6 +528,7 @@ export default function UnifiedBoothScreen() {
         design_offset_x: activeTemplate?.design_offset_x ?? null,
         design_offset_y: activeTemplate?.design_offset_y ?? null,
         overlay_mode: activeTemplate?.overlay_mode ?? 'free',
+        design_stretch: activeTemplate?.design_stretch ?? false,
       });
 
       console.log('✅ Preview generado:', previewUrl);

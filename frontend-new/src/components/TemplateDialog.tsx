@@ -100,6 +100,27 @@ interface FormData {
   design_stretch: boolean;
 }
 
+function applySmartOverlayDefaults(
+  prev: FormData,
+  overlayMode?: OverlayModeType,
+  designPosition?: DesignPositionType,
+): FormData {
+  const nextOverlayMode = overlayMode ?? prev.overlay_mode;
+  const nextDesignPosition = designPosition ?? prev.design_position;
+  const isFooter = nextOverlayMode === OVERLAY_MODE_FOOTER;
+
+  return {
+    ...prev,
+    overlay_mode: nextOverlayMode,
+    design_position: nextDesignPosition,
+    design_scale: isFooter ? 0.8 : 1.0,
+    design_offset_x: DEFAULT_OFFSET_X,
+    design_offset_y:
+      nextDesignPosition === DESIGN_POSITION_TOP ? DEFAULT_OFFSET_Y_TOP : DEFAULT_OFFSET_Y_BOTTOM,
+    design_stretch: !isFooter,
+  };
+}
+
 interface ValidationError {
   field: string;
   message: string;
@@ -154,13 +175,6 @@ export default function TemplateDialog({
       layout: LAYOUT_4X1_VERTICAL,
       overlay_mode: OVERLAY_MODE_FREE,
       description: '4 fotos verticales aprovechando todo el espacio.'
-    },
-    {
-      id: 'grid',
-      label: 'Postal (Grid 2x2)',
-      layout: LAYOUT_2X2_GRID,
-      overlay_mode: OVERLAY_MODE_FREE,
-      description: '4 fotos en cuadrícula estilo postal.'
     }
   ] as const;
 
@@ -411,15 +425,7 @@ export default function TemplateDialog({
       // Smart Default Logic:
       // - Footer Mode: Scale 0.8 (80%) to leave safe margin. No stretch.
       // - Free Mode: Scale 1.0 (100%) and Stretch (assuming full frame).
-      const isFooter = prev.overlay_mode === OVERLAY_MODE_FOOTER;
-
-      return {
-        ...prev,
-        design_scale: isFooter ? 0.8 : 1.0,
-        design_offset_x: DEFAULT_OFFSET_X,
-        design_offset_y: prev.design_position === DESIGN_POSITION_TOP ? DEFAULT_OFFSET_Y_TOP : DEFAULT_OFFSET_Y_BOTTOM,
-        design_stretch: !isFooter, // Auto-stretch for free mode (frames), safe margin for footer
-      };
+      return applySmartOverlayDefaults(prev);
     });
   }, []);
 
@@ -516,6 +522,8 @@ export default function TemplateDialog({
       setIsLoadingPreview(true);
       const path = await photoboothAPI.image.uploadDesignPreview(file);
       setDesignPreviewPath(path);
+      // Aplicar defaults inteligentes según el modo actual (footer vs libre)
+      setFormData((prev) => applySmartOverlayDefaults(prev));
     } catch (uploadErr) {
       console.error('No se pudo subir diseño temporal:', uploadErr);
       setDesignPreviewPath(null);
@@ -812,12 +820,19 @@ export default function TemplateDialog({
                         <div
                           key={format.id}
                           onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              layout: format.layout,
-                              overlay_mode: format.overlay_mode,
-                              // Reset design position if needed, or keep current
-                            }));
+                            setFormData((prev) => {
+                              const base = { ...prev, layout: format.layout };
+                              const isFooterFormat = format.id === 'footer';
+                              const targetDesignPosition = isFooterFormat
+                                ? DESIGN_POSITION_BOTTOM
+                                : base.design_position;
+
+                              return applySmartOverlayDefaults(
+                                base,
+                                format.overlay_mode,
+                                targetDesignPosition,
+                              );
+                            });
                           }}
                           className={`
                             relative flex items-start space-x-3 rounded-lg border p-4 cursor-pointer transition-all hover:bg-muted/50

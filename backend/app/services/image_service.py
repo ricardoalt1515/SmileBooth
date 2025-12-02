@@ -43,6 +43,11 @@ SUPPORTED_VERTICAL_LAYOUTS = {
 }
 
 FOOTER_HEIGHT_RATIO = 0.18
+DEFAULT_TOP_MARGIN = 30
+DEFAULT_BOTTOM_MARGIN = 30
+DEFAULT_PHOTO_SPACING = 20  # Alineado con Template.photo_spacing y Settings.photo_spacing
+FOOTER_GAP_BELOW_LAST_PHOTO = 20  # Separación entre la última foto y el inicio del footer en modo footer
+HORIZONTAL_PHOTO_MARGIN = 25  # Margen lateral por lado para las fotos
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -112,9 +117,9 @@ class ImageService:
         base_strip_width = IMAGE_CONFIG["strip_width"]
         base_photo_height = IMAGE_CONFIG["photo_height"]
         DESIGN_HEIGHT = IMAGE_CONFIG["design_height"]
-        TOP_MARGIN = 30
-        BOTTOM_MARGIN = 30
-        PHOTO_SPACING = photo_spacing if photo_spacing is not None else 5
+        TOP_MARGIN = DEFAULT_TOP_MARGIN
+        BOTTOM_MARGIN = DEFAULT_BOTTOM_MARGIN
+        PHOTO_SPACING = photo_spacing if photo_spacing is not None else DEFAULT_PHOTO_SPACING
 
         
         # Convertir color de fondo de hex a RGB (PIL requiere tupla RGB)
@@ -182,9 +187,11 @@ class ImageService:
                 if target_strip_height:
                     footer_height = int(target_strip_height * FOOTER_HEIGHT_RATIO)
                 else:
-                    footer_height = DESIGN_HEIGHT + PHOTO_SPACING
-                design_section_height = footer_height
+                    footer_height = DESIGN_HEIGHT
+                # Reservar siempre una pequeña banda de respiración entre fotos y footer
+                design_section_height = footer_height + FOOTER_GAP_BELOW_LAST_PHOTO
             elif use_legacy_band:
+                # Mantener compat con banda legacy: diseño + pequeño espacio configurable
                 design_section_height = DESIGN_HEIGHT + PHOTO_SPACING
             else:
                 design_section_height = 0
@@ -237,7 +244,7 @@ class ImageService:
 
                   photo_processed = ImageService._process_photo(
                       source,
-                      strip_width - 50,  # Ancho con margen lateral
+                      strip_width - (HORIZONTAL_PHOTO_MARGIN * 2),  # Ancho útil para fotos con margen lateral
                       target_photo_height,
                   )
 

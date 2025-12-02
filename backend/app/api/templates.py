@@ -9,6 +9,7 @@ Key concepts:
 """
 import shutil
 import json
+import uuid
 from pathlib import Path
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException

@@ -1,22 +1,4 @@
 {
-  "template_20251109_231540": {
-    "id": "template_20251109_231540",
-    "name": "test4fotos",
-    "layout": "4x1-vertical",
-    "design_file_path": "/data/designs/template_assets/template_20251109_231540_design.png",
-    "design_position": "bottom",
-    "overlay_mode": "free",
-    "design_scale": null,
-    "design_offset_x": null,
-    "design_offset_y": null,
-    "design_stretch": false,
-    "background_color": "#e60000",
-    "photo_spacing": 20,
-    "photo_filter": "none",
-    "is_active": false,
-    "created_at": "2025-11-09T23:15:40.159792",
-    "preview_url": null
-  },
   "template_20251115_150047": {
     "id": "template_20251115_150047",
     "name": "Chihuahua",
@@ -121,8 +103,44 @@
     "background_color": "#FFFFFF",
     "photo_spacing": 20,
     "photo_filter": "none",
-    "is_active": true,
+    "is_active": false,
     "created_at": "2025-12-01T22:12:09.792706",
+    "preview_url": null
+  },
+  "template_20251201_232848": {
+    "id": "template_20251201_232848",
+    "name": "selva",
+    "layout": "3x1-vertical",
+    "design_file_path": "/data/designs/template_assets/template_20251201_232848_design.png",
+    "design_position": "bottom",
+    "overlay_mode": "footer",
+    "design_scale": 0.8,
+    "design_offset_x": 0.5277669236794843,
+    "design_offset_y": 0.8312816715781867,
+    "design_stretch": false,
+    "background_color": "#FFFFFF",
+    "photo_spacing": 20,
+    "photo_filter": "none",
+    "is_active": false,
+    "created_at": "2025-12-01T23:28:48.524610",
+    "preview_url": null
+  },
+  "template_20251202_074020": {
+    "id": "template_20251202_074020",
+    "name": "foc",
+    "layout": "3x1-vertical",
+    "design_file_path": "/data/designs/template_assets/template_20251202_074020_design.png",
+    "design_position": "bottom",
+    "overlay_mode": "footer",
+    "design_scale": 0.8,
+    "design_offset_x": 0.5,
+    "design_offset_y": 0.8,
+    "design_stretch": false,
+    "background_color": "#FFFFFF",
+    "photo_spacing": 20,
+    "photo_filter": "none",
+    "is_active": true,
+    "created_at": "2025-12-02T07:40:20.722740",
     "preview_url": null
   }
 }
