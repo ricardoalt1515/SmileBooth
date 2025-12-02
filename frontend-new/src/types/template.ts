@@ -97,7 +97,7 @@ export interface TemplateUpdate {
   design_offset_x?: number | null;
   design_offset_y?: number | null;
   design_stretch?: boolean;
-   photo_aspect_ratio?: PhotoAspectRatioType;
+  photo_aspect_ratio?: PhotoAspectRatioType;
 }
 
 export interface FormData {

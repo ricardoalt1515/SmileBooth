@@ -126,40 +126,46 @@ export default function TemplatesManager({ onTemplateActivated }: TemplatesManag
       setIsGeneratingPreview(true);
       const previewEntries: Record<string, string> = {};
       const needs = (layout: string) => getLayoutPhotoCount(layout as any);
+      const MAX_CONCURRENT_PREVIEWS = 3;
 
-      const previewPromises = templates.map(async (tpl) => {
-        try {
-          const required = needs(tpl.layout);
-          const effectivePhotos = Array.from({ length: required }, (_, idx) =>
-            basePhotos[idx % basePhotos.length]
-          );
+      for (let i = 0; i < templates.length; i += MAX_CONCURRENT_PREVIEWS) {
+        const batch = templates.slice(i, i + MAX_CONCURRENT_PREVIEWS);
 
-          const url = await photoboothAPI.image.previewStrip({
-            photo_paths: effectivePhotos,
-            design_path: tpl.design_file_path ?? null,
-            layout: tpl.layout,
-            design_position: tpl.design_position,
-            background_color: tpl.background_color,
-            photo_spacing: tpl.photo_spacing,
-            photo_filter: tpl.photo_filter as any,
-            design_scale: tpl.design_scale ?? null,
-            design_offset_x: tpl.design_offset_x ?? null,
-            design_offset_y: tpl.design_offset_y ?? null,
-            overlay_mode: tpl.overlay_mode ?? OVERLAY_MODE_FREE,
-            design_stretch: tpl.design_stretch ?? false,
-            photo_aspect_ratio: (tpl as any).photo_aspect_ratio ?? 'auto',
-          });
-          return { id: tpl.id, url };
-        } catch (error) {
-          console.warn('No se pudo generar preview para template', tpl.id, error);
-          return null;
-        }
-      });
+        const results = await Promise.all(
+          batch.map(async (tpl) => {
+            try {
+              const required = needs(tpl.layout);
+              const effectivePhotos = Array.from({ length: required }, (_, idx) =>
+                basePhotos[idx % basePhotos.length]
+              );
 
-      const results = await Promise.all(previewPromises);
-      for (const result of results) {
-        if (result && result.url) {
-          previewEntries[result.id] = result.url;
+              const url = await photoboothAPI.image.previewStrip({
+                photo_paths: effectivePhotos,
+                design_path: tpl.design_file_path ?? null,
+                layout: tpl.layout,
+                design_position: tpl.design_position,
+                background_color: tpl.background_color,
+                photo_spacing: tpl.photo_spacing,
+                photo_filter: tpl.photo_filter as any,
+                design_scale: tpl.design_scale ?? null,
+                design_offset_x: tpl.design_offset_x ?? null,
+                design_offset_y: tpl.design_offset_y ?? null,
+                overlay_mode: tpl.overlay_mode ?? OVERLAY_MODE_FREE,
+                design_stretch: tpl.design_stretch ?? false,
+                photo_aspect_ratio: (tpl as any).photo_aspect_ratio ?? 'auto',
+              });
+              return { id: tpl.id, url };
+            } catch (error) {
+              console.warn('No se pudo generar preview para template', tpl.id, error);
+              return null;
+            }
+          })
+        );
+
+        for (const result of results) {
+          if (result && result.url) {
+            previewEntries[result.id] = result.url;
+          }
         }
       }
 

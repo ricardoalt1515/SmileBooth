@@ -1,4 +1,39 @@
 {
+  "378dbb2f-91f6-4d9f-8535-a55244cf23c7": {
+    "job_id": "378dbb2f-91f6-4d9f-8535-a55244cf23c7",
+    "job_type": "compose-strip",
+    "payload": {
+      "photo_paths": [
+        "/data/photos/20251202_114539/shot-1.jpg",
+        "/data/photos/20251202_114539/shot-2.jpg",
+        "/data/photos/20251202_114539/shot-3.jpg"
+      ],
+      "design_path": "/data/designs/template_assets/template_20251202_114508_design.png",
+      "session_id": "20251202_114539",
+      "layout": "3x1-vertical",
+      "design_position": "bottom",
+      "background_color": "#FFFFFF",
+      "photo_spacing": 20,
+      "photo_filter": "none",
+      "print_mode": "dual-strip",
+      "photo_aspect_ratio": null,
+      "design_scale": 0.8,
+      "design_offset_x": 0.5,
+      "design_offset_y": 0.8,
+      "overlay_mode": "footer",
+      "design_stretch": false
+    },
+    "status": "completed",
+    "result": {
+      "success": true,
+      "strip_path": "/data/photos/20251202_114539/strip.jpg",
+      "full_page_path": "/data/photos/20251202_114539/full_strip.jpg",
+      "message": "Tira creada exitosamente"
+    },
+    "error": null,
+    "created_at": "2025-12-02T11:46:12.954697",
+    "updated_at": "2025-12-02T11:46:13.263993"
+  },
   "9d9ddbdb-8f4c-4461-b6bb-716dde1a1ab1": {
     "job_id": "9d9ddbdb-8f4c-4461-b6bb-716dde1a1ab1",
     "job_type": "compose-strip",

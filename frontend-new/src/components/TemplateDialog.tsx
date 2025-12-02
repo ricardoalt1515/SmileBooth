@@ -1211,9 +1211,17 @@ export default function TemplateDialog({
                   maxHeight: '800px',
                   aspectRatio: '2/6',
                   backgroundColor: formData.background_color,
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.05)'
+                  // Efecto "Sombra Realista" (Paper Shadow)
+                  boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.05)',
                 }}
               >
+                {/* Efecto "Glossy Paper" (Brillo superficial) */}
+                <div
+                  className="absolute inset-0 pointer-events-none z-20 rounded-sm"
+                  style={{
+                    background: 'linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0.0) 45%, transparent 50%)',
+                  }}
+                />
                 {stripPreviewUrl ? (
                   <>
                     <div className="absolute inset-0 bg-white animate-in fade-in duration-500">
