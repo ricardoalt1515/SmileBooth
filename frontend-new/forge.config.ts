@@ -23,7 +23,7 @@ const config: ForgeConfig = {
     },
     // In production we include the packaged backend exe as an extra resource.
     // The build pipeline must place backend/dist/photobooth-backend.exe before running `npm run make`.
-    extraResource: ['../backend/dist/photobooth-backend.exe'],
+    extraResource: ['../resources/photobooth-backend.exe'],
   },
   rebuildConfig: {},
   makers: [
